@@ -3,7 +3,7 @@
 **Master Thesis Project**: Self-Supervised Learning for Real-Time Fault Detection in Automotive IMU Sensors
 
 **Author**: Yahia Amir Yahia Gamal  
-**Year**: 2024-2025
+**Year**: 2025-2026
 
 ---
 
