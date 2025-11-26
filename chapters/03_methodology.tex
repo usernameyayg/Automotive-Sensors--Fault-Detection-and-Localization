@@ -1,0 +1,237 @@
+\chapter{Methodology}
+\label{chap:methodology}
+
+This chapter presents our adaptive self-supervised learning framework for automotive sensor fault detection and localization. We first provide an overview of the system architecture, then detail each component.
+
+\section{Framework Overview}
+
+\Cref{fig:framework_overview} illustrates the overall framework, which consists of four main stages:
+
+\begin{enumerate}
+    \item \textbf{Self-Supervised Representation Learning}: A 1D \gls{cnn} encoder is trained on normal sensor data using transformation classification as the pretext task
+    \item \textbf{Feature Extraction and Statistical Modeling}: The trained encoder extracts features from normal data, and distributional statistics (mean, covariance) are computed for Mahalanobis distance calculation
+    \item \textbf{Fault Detection}: New sensor data is encoded and its Mahalanobis distance from the normal distribution is computed; distances exceeding a threshold indicate potential faults
+    \item \textbf{Fault Localization}: When a fault is detected, ablation-based analysis identifies which sensor(s) are faulty
+\end{enumerate}
+
+A key innovation is the \textit{adaptive learning capability}: the system can incrementally update its statistical models and fault classifier with new data without retraining the encoder, enabling continuous evolution in operational environments.
+
+% Note: Add figure in final version
+% \begin{figure}[htbp]
+%     \centering
+%     \includegraphics[width=0.9\textwidth]{figures/framework_overview.pdf}
+%     \caption{Overview of the adaptive SSL-based fault detection framework}
+%     \label{fig:framework_overview}
+% \end{figure}
+
+\section{Self-Supervised Representation Learning}
+
+\subsection{Motivation for Self-Supervised Learning}
+
+Supervised fault detection requires labeled examples of various fault conditions, which are difficult to obtain in automotive contexts. Self-supervised learning addresses this by learning useful representations from normal operational data alone. The hypothesis is that representations learned to recognize transformations of normal data will produce distinctive patterns for abnormal (faulty) data.
+
+\subsection{Transformation Classification Pretext Task}
+
+We define three transformations applied to sensor time-series windows:
+
+\begin{description}
+    \item[Jitter (T1)] Adds small Gaussian noise: $\mathbf{x}' = \mathbf{x} + \mathcal{N}(0, \sigma^2)$
+
+    \item[Masking (T2)] Randomly sets segments to zero: $x'_i = 0$ for $i \in \mathcal{M}$, where $\mathcal{M}$ is a random subset of time steps
+
+    \item[Negation (T3)] Inverts the signal: $\mathbf{x}' = -\mathbf{x}$
+\end{description}
+
+These transformations are chosen because:
+\begin{itemize}
+    \item They preserve semantic content while creating distinguishable variations
+    \item They are relevant to automotive scenarios (jitter simulates sensor noise, masking simulates signal dropout, negation captures polarity)
+    \item They enable a simple multi-class classification task suitable for CNNs
+\end{itemize}
+
+The pretext task is to classify which transformation was applied to a given window. Let $\mathbf{x} \in \mathbb{R}^{T \times C}$ be a time-series window with $T$ time steps and $C$ channels (sensors). The encoder $f_\theta: \mathbb{R}^{T \times C} \rightarrow \mathbb{R}^{d}$ maps input to a $d$-dimensional representation. A classifier head $g_\phi: \mathbb{R}^{d} \rightarrow \mathbb{R}^{K}$ predicts the transformation class ($K=3$ transformations). Training minimizes cross-entropy loss:
+
+\begin{equation}
+\mathcal{L}_{\text{SSL}} = -\sum_{i=1}^{N} \sum_{k=1}^{K} y_{ik} \log(\hat{y}_{ik})
+\end{equation}
+
+where $y_{ik}$ is the true label (one-hot encoded) and $\hat{y}_{ik} = \text{softmax}(g_\phi(f_\theta(\mathbf{x}_i)))_k$.
+
+\subsection{Encoder Architecture}
+
+We use a 1D \gls{cnn} architecture \parencite{kiranyaz20191d} suited for time-series data. The encoder consists of:
+
+\begin{itemize}
+    \item \textbf{Input layer}: Accepts windows of size $(T, C)$
+    \item \textbf{Convolutional layers}: Three 1D convolutional layers with kernel sizes (7, 5, 3), stride 1, and increasing channels (64, 128, 256)
+    \item \textbf{Activation}: ReLU activation after each convolutional layer
+    \item \textbf{Batch normalization}: Applied after each activation for training stability
+    \item \textbf{Global average pooling}: Aggregates temporal dimension to fixed-size representation
+    \item \textbf{Output}: $d$-dimensional embedding (typically $d=256$)
+\end{itemize}
+
+The relatively shallow architecture balances representational capacity with computational efficiency, which is crucial for real-time operation on embedded automotive hardware.
+
+\section{Fault Detection via Mahalanobis Distance}
+
+\subsection{Distributional Modeling}
+
+After training the encoder on normal data, we extract embeddings $\{\mathbf{z}_i\}_{i=1}^{N}$ from a validation set of normal samples, where $\mathbf{z}_i = f_\theta(\mathbf{x}_i) \in \mathbb{R}^{d}$. We compute the sample mean and covariance:
+
+\begin{align}
+\boldsymbol{\mu} &= \frac{1}{N} \sum_{i=1}^{N} \mathbf{z}_i \\
+\boldsymbol{\Sigma} &= \frac{1}{N-1} \sum_{i=1}^{N} (\mathbf{z}_i - \boldsymbol{\mu})(\mathbf{z}_i - \boldsymbol{\mu})^\top
+\end{align}
+
+\subsection{Mahalanobis Distance for Anomaly Detection}
+
+The Mahalanobis distance \parencite{de2000mahalanobis} measures how far a point $\mathbf{z}$ is from the distribution center, accounting for correlations:
+
+\begin{equation}
+D_M(\mathbf{z}) = \sqrt{(\mathbf{z} - \boldsymbol{\mu})^\top \boldsymbol{\Sigma}^{-1} (\mathbf{z} - \boldsymbol{\mu})}
+\end{equation}
+
+For numerical stability, we use the squared Mahalanobis distance $D_M^2(\mathbf{z})$ and add a regularization term $\epsilon \mathbf{I}$ to the covariance matrix:
+
+\begin{equation}
+\boldsymbol{\Sigma}_{\text{reg}} = \boldsymbol{\Sigma} + \epsilon \mathbf{I}
+\end{equation}
+
+where $\epsilon = 10^{-6}$ prevents singularity.
+
+A sample is classified as anomalous (faulty) if:
+
+\begin{equation}
+D_M^2(\mathbf{z}) > \tau
+\end{equation}
+
+where $\tau$ is a threshold determined from the validation set. We set $\tau$ to the 90th percentile of validation Mahalanobis distances, ensuring a 10\% false positive rate on normal data.
+
+\subsection{Rationale for Mahalanobis Distance}
+
+We chose Mahalanobis distance over simpler metrics (Euclidean distance, reconstruction error) because:
+\begin{itemize}
+    \item It accounts for correlations between embedding dimensions
+    \item It has a statistical interpretation (related to the $\chi^2$ distribution under Gaussian assumptions)
+    \item It has been shown effective for out-of-distribution detection in neural networks \parencite{lee2018simple}
+    \item It is computationally efficient (matrix multiplication) for real-time inference
+\end{itemize}
+
+\section{Fault Localization}
+
+Detecting that a fault exists is insufficient; identifying the faulty sensor(s) is critical for effective diagnosis and mitigation.
+
+\subsection{Ablation-Based Localization}
+
+Our localization approach is based on the hypothesis: \textit{removing a faulty sensor from the input should reduce the anomaly score, while removing a healthy sensor should not significantly affect it}.
+
+Given a detected anomaly with embedding $\mathbf{z}_{\text{full}}$ (all sensors), we systematically create ablated versions by masking each sensor individually:
+
+\begin{equation}
+\mathbf{x}^{(-c)} = \mathbf{x} \odot \mathbf{m}^{(-c)}
+\end{equation}
+
+where $\mathbf{m}^{(-c)}$ is a mask that zeros out sensor $c$, and $\odot$ is element-wise multiplication. We compute the Mahalanobis distance for each ablated input:
+
+\begin{equation}
+D_c = D_M^2(f_\theta(\mathbf{x}^{(-c)}))
+\end{equation}
+
+The localization score for sensor $c$ is the reduction in anomaly score when that sensor is removed:
+
+\begin{equation}
+S_c = D_M^2(\mathbf{z}_{\text{full}}) - D_c
+\end{equation}
+
+Higher $S_c$ indicates sensor $c$ is more likely faulty. We rank sensors by $S_c$ and report the top-1 (most likely faulty) and top-3 sensors.
+
+\subsection{Multi-Sensor Fault Localization}
+
+In cases where multiple sensors are faulty, we can extend the approach by considering combinations of sensors. However, this increases computational cost exponentially with the number of sensors. For efficiency, we use the single-sensor ablation approach and leave multi-sensor combinatorial analysis for future work.
+
+\section{Adaptive Learning Framework}
+
+A key contribution of our work is enabling the system to adapt over time without full retraining, which is critical for long-term deployment in operational vehicles.
+
+\subsection{Frozen Encoder, Updateable Statistics}
+
+Once the encoder $f_\theta$ is trained, we freeze its parameters. Adaptation occurs by updating the distributional statistics ($\boldsymbol{\mu}$, $\boldsymbol{\Sigma}$) and the fault classifier, while keeping the encoder fixed. This design choice is motivated by:
+
+\begin{itemize}
+    \item \textbf{Stability}: The encoder learned general representations from diverse normal data; updating it with limited new data risks overfitting or catastrophic forgetting
+    \item \textbf{Efficiency}: Updating statistics is computationally cheap compared to retraining a neural network
+    \item \textbf{Interpretability}: Changes in anomaly detection behavior are attributable to distributional shifts, not representation changes
+\end{itemize}
+
+\subsection{Incremental Statistics Update}
+
+When new normal data $\{\mathbf{z}_{\text{new},j}\}_{j=1}^{M}$ becomes available, we update the mean and covariance incrementally using Welford's algorithm \parencite{welford1962note}.
+
+Let $\boldsymbol{\mu}_{\text{old}}$, $\boldsymbol{\Sigma}_{\text{old}}$, and $n_{\text{old}}$ be the previous mean, covariance, and sample count. The updated statistics are:
+
+\begin{align}
+n_{\text{new}} &= n_{\text{old}} + M \\
+\boldsymbol{\mu}_{\text{new}} &= \frac{n_{\text{old}} \boldsymbol{\mu}_{\text{old}} + M \bar{\mathbf{z}}_{\text{new}}}{n_{\text{new}}}
+\end{align}
+
+where $\bar{\mathbf{z}}_{\text{new}} = \frac{1}{M} \sum_{j=1}^{M} \mathbf{z}_{\text{new},j}$ is the mean of new embeddings.
+
+For covariance, we use the parallel algorithm:
+
+\begin{equation}
+\boldsymbol{\Sigma}_{\text{new}} = \frac{(n_{\text{old}}-1)\boldsymbol{\Sigma}_{\text{old}} + (M-1)\boldsymbol{\Sigma}_{\text{new}}' + \frac{n_{\text{old}} M}{n_{\text{new}}}(\boldsymbol{\mu}_{\text{old}} - \bar{\mathbf{z}}_{\text{new}})(\boldsymbol{\mu}_{\text{old}} - \bar{\mathbf{z}}_{\text{new}})^\top}{n_{\text{new}}-1}
+\end{equation}
+
+where $\boldsymbol{\Sigma}_{\text{new}}'$ is the covariance of the new samples.
+
+This update is numerically stable and computationally efficient ($O(d^2)$ operations).
+
+\subsection{Incremental Fault Classifier}
+
+In addition to anomaly detection, we maintain a fault classifier that learns to categorize detected faults by type (e.g., offset, noise, dropout). This classifier uses Stochastic Gradient Descent with warm start \parencite{pmlr2011online}, enabling incremental learning.
+
+When new labeled fault data becomes available (e.g., from service records or HIL testing), we perform a partial fit:
+
+\begin{equation}
+\theta_{\text{classifier}} \leftarrow \theta_{\text{classifier}} - \eta \nabla_\theta \mathcal{L}(\mathbf{z}, y)
+\end{equation}
+
+where $\eta$ is the learning rate, $\mathbf{z}$ is the embedding of a faulty sample, $y$ is its fault type label, and $\mathcal{L}$ is the log loss.
+
+The classifier can learn new fault types dynamically by specifying the full class set during the first update, then adding samples from new classes as they become available.
+
+\subsection{Adaptation Workflow}
+
+The operational adaptation workflow is:
+
+\begin{enumerate}
+    \item \textbf{Continuous monitoring}: System processes incoming sensor data and performs fault detection
+    \item \textbf{Normal data collection}: Samples classified as normal with high confidence are stored
+    \item \textbf{Periodic statistics update}: At regular intervals (e.g., daily), accumulated normal samples are used to update $\boldsymbol{\mu}$ and $\boldsymbol{\Sigma}$
+    \item \textbf{Fault data labeling}: Detected faults are logged; a subset may be labeled (e.g., through service technician feedback or HIL validation)
+    \item \textbf{Classifier update}: Labeled fault samples are used to update the fault classifier incrementally
+\end{enumerate}
+
+This workflow enables the system to adapt to gradual distribution shifts (e.g., component aging, environmental changes) and learn new fault patterns without human intervention for normal operation.
+
+\section{Ensemble Methods for Robustness}
+
+To improve robustness, we train multiple encoder models with different random initializations and aggregate their predictions. For detection, we average the Mahalanobis distances:
+
+\begin{equation}
+D_{\text{ensemble}}^2(\mathbf{z}) = \frac{1}{K} \sum_{k=1}^{K} D_{M,k}^2(\mathbf{z})
+\end{equation}
+
+For localization, we average the localization scores across models. Ensemble methods reduce variance and improve generalization.
+
+\section{Summary}
+
+Our methodology combines:
+\begin{itemize}
+    \item \textbf{Self-supervised learning} to learn representations without labeled fault data
+    \item \textbf{Mahalanobis distance} for statistically-grounded anomaly detection
+    \item \textbf{Ablation-based localization} to identify faulty sensors
+    \item \textbf{Incremental adaptation} to evolve with new data without full retraining
+\end{itemize}
+
+The following chapter describes the implementation details and experimental setup.

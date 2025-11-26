@@ -1,0 +1,91 @@
+\chapter{Related Work}
+\label{chap:related_work}
+
+This chapter reviews prior research relevant to our approach, organized into four main areas: self-supervised learning, anomaly detection for time-series data, automotive fault diagnosis, and incremental learning methods.
+
+\section{Self-Supervised Learning}
+
+\gls{ssl} has emerged as a powerful paradigm for learning useful representations from unlabeled data \parencite{lecun2015deep}. Unlike supervised learning, which requires labeled examples, SSL formulates pretext tasks that generate supervisory signals from the data itself.
+
+\subsection{Contrastive Learning Approaches}
+
+Contrastive learning methods have achieved remarkable success in computer vision. SimCLR \parencite{chen2020simple} learns representations by maximizing agreement between differently augmented views of the same image while minimizing agreement with other images. MoCo \parencite{he2020momentum} uses a momentum encoder and queue mechanism to maintain a large and consistent dictionary for contrastive learning. These approaches have demonstrated that representations learned without labels can match or exceed supervised learning performance on downstream tasks.
+
+While highly successful in vision domains, direct application of contrastive learning to time-series sensor data faces challenges due to the temporal nature of the data and the difficulty of defining meaningful augmentations that preserve semantic content.
+
+\subsection{Prediction-Based Methods}
+
+Another SSL approach involves predicting missing or future parts of the input. Contrastive Predictive Coding (CPC) \parencite{oord2018representation} learns representations by predicting future observations in latent space using contrastive objectives. BYOL \parencite{grill2020bootstrap} eliminates the need for negative samples by using a momentum encoder and predictor network.
+
+For automotive sensor data, prediction-based methods can leverage the temporal correlations inherent in vehicle dynamics, but may struggle with the high variability of driving scenarios.
+
+\subsection{Transformation-Based Pretext Tasks}
+
+An alternative SSL strategy is to train models to recognize transformations applied to the data. For time-series, \textcite{tran2022self} propose using transformations such as jittering, masking, and scaling as pretext tasks for anomaly detection in industrial IoT systems. The intuition is that a model trained to recognize these transformations on normal data will produce unusual representations for anomalous data.
+
+Our work builds on this transformation-based approach, adapting it specifically for automotive sensor data with multiple channels and developing an adaptive framework that can evolve over time.
+
+\section{Anomaly Detection for Time-Series}
+
+Anomaly detection in time-series data is a well-studied problem with applications across many domains \parencite{salehi2021unified}.
+
+\subsection{Statistical Methods}
+
+Traditional statistical approaches model normal data distribution and flag observations that deviate significantly. Methods include z-score analysis, isolation forests, and one-class SVM. While interpretable, these methods often struggle with high-dimensional multivariate time-series and complex normal variability.
+
+Mahalanobis distance-based approaches \parencite{de2000mahalanobis} account for correlations between variables and have been successfully applied to out-of-distribution detection in neural network representations \parencite{lee2018simple}. We adopt this approach for its theoretical foundation and computational efficiency.
+
+\subsection{Deep Learning Methods}
+
+Deep learning has enabled more sophisticated anomaly detection. Autoencoders learn compressed representations and detect anomalies via reconstruction error. \textcite{su2019robust} propose a stochastic recurrent neural network for multivariate time-series anomaly detection. USAD \parencite{audibert2020usad} uses adversarial training with autoencoders for unsupervised anomaly detection.
+
+LSTM-based approaches can model temporal dependencies but require careful architecture design and may be computationally expensive for real-time automotive applications. Our CNN-based approach offers a favorable trade-off between modeling capacity and computational efficiency.
+
+\section{Automotive Fault Diagnosis}
+
+Fault detection and diagnosis in automotive systems has attracted significant research attention due to safety-critical implications.
+
+\subsection{Model-Based Approaches}
+
+Traditional automotive fault detection relies on analytical redundancy, where mathematical models of expected sensor behavior are compared with actual observations \parencite{iso26262_2018}. While these methods are well-understood and verifiable, they require extensive domain expertise and may not generalize to all operating conditions.
+
+\subsection{Data-Driven Methods}
+
+Machine learning approaches have shown promise for automotive fault diagnosis. \textcite{zhao2019machine} provide a comprehensive survey of deep learning for machine health monitoring. \textcite{wang2020deep} review deep learning-based fault diagnosis across various domains.
+
+Most existing work focuses on supervised learning with labeled fault data. \textcite{lu2020intelligent} use hierarchical CNNs for bearing fault classification, achieving high accuracy but requiring extensive labeled fault examples. The challenge of obtaining labeled fault data in automotive contexts motivates our self-supervised approach.
+
+\subsection{Hardware-in-the-Loop Testing}
+
+\gls{hil} simulation is widely used in automotive development for testing control systems under realistic conditions without requiring a physical vehicle \parencite{fathy2006review, bringmann2008model}. HIL systems can inject faults in a controlled manner, providing valuable data for fault detection algorithm development. We leverage HIL-calibrated fault ranges to create realistic test scenarios.
+
+\section{Incremental and Online Learning}
+
+Adaptive systems that can learn continuously without forgetting are crucial for long-term autonomous operation.
+
+\subsection{Incremental Learning Algorithms}
+
+Incremental learning methods update models with new data without retraining from scratch. \textcite{losing2018incremental} provide a comprehensive review of online learning algorithms. Stochastic Gradient Descent (SGD) based approaches \parencite{pmlr2011online} enable efficient updates with streaming data.
+
+Our incremental fault classifier uses SGD with warm start, allowing new fault types to be learned while retaining knowledge of previously seen faults.
+
+\subsection{Incremental Statistics}
+
+For anomaly detection, incrementally updating distributional statistics is essential. Welford's algorithm \parencite{welford1962note} provides a numerically stable method for computing mean and variance incrementally. We extend this to covariance matrices for multivariate Mahalanobis distance computation.
+
+\section{Datasets}
+
+The Audi A2D2 dataset \parencite{geiger2020a2d2} provides real-world automotive sensor data collected from an Audi vehicle equipped with various sensors including cameras, LiDAR, and vehicle bus signals. The dataset includes diverse driving scenarios and is well-suited for developing and evaluating automotive perception and fault detection algorithms. We use the vehicle bus signal data, which contains \gls{can} bus sensor readings at high frequency.
+
+\section{Summary}
+
+While existing research has made significant progress in SSL, anomaly detection, and automotive fault diagnosis individually, the combination of these techniques into an adaptive framework specifically designed for automotive sensor fault detection represents a novel contribution. Our work bridges these areas by:
+
+\begin{itemize}
+    \item Applying transformation-based SSL to automotive multivariate sensor time-series
+    \item Using Mahalanobis distance on learned representations for anomaly detection
+    \item Developing an incremental learning framework that adapts without encoder retraining
+    \item Demonstrating practical applicability with HIL-calibrated fault injection
+\end{itemize}
+
+The following chapter describes our methodology in detail.

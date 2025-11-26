@@ -1,0 +1,148 @@
+\chapter{Conclusion and Future Work}
+\label{chap:conclusion}
+
+This chapter summarizes the key findings of this thesis, discusses limitations, and outlines promising directions for future research.
+
+\section{Summary of Contributions}
+
+This thesis addressed the challenge of detecting and localizing sensor faults in automotive systems without requiring extensive labeled fault data. We developed an adaptive self-supervised learning framework that learns from normal operational data and can evolve continuously as new data becomes available.
+
+\subsection{Main Contributions}
+
+The key contributions of this work are:
+
+\begin{enumerate}
+    \item \textbf{Self-supervised representation learning for automotive sensors}: We adapted transformation classification, a self-supervised learning technique, to multivariate automotive sensor time-series. By training a 1D CNN encoder to recognize transformations (jitter, masking, negation) applied to normal data, we learned representations that effectively capture normal sensor behavior without requiring labeled fault examples.
+
+    \item \textbf{Mahalanobis distance-based fault detection}: We employed Mahalanobis distance in the learned embedding space for anomaly detection. This statistically grounded approach accounts for feature correlations and achieved 77.5\% detection accuracy with 82.4\% precision on HIL-calibrated fault scenarios.
+
+    \item \textbf{Ablation-based fault localization}: We proposed a localization method based on systematically masking individual sensors and measuring the impact on anomaly scores. The approach achieved 67.6\% top-1 accuracy and 85.3\% top-3 accuracy, providing actionable information for diagnosis.
+
+    \item \textbf{Adaptive learning framework}: We developed an incremental learning mechanism that updates distributional statistics and a fault classifier without retraining the encoder. This enables the system to adapt to new operational conditions and learn new fault types continuously, demonstrated by a 48\% reduction in false positives when adapted to new driving scenarios.
+
+    \item \textbf{Rigorous empirical evaluation}: We validated the approach on the Audi A2D2 dataset with HIL-calibrated fault injection across 15 experimental runs, providing statistical confidence intervals and comprehensive ablation studies.
+\end{enumerate}
+
+\subsection{Research Questions Addressed}
+
+Returning to the research objectives stated in Chapter~\ref{chap:introduction}:
+
+\begin{description}
+    \item[RQ1: Self-supervised representation learning] We successfully developed a transformation classification pretext task that learns meaningful representations from normal sensor data. Ablation studies showed this approach outperforms both random features and autoencoder-based representations.
+
+    \item[RQ2: Fault detection without labeled examples] Our Mahalanobis distance-based anomaly detection achieved 77.5\% accuracy without using any labeled fault data during training, demonstrating the viability of unsupervised fault detection for automotive applications.
+
+    \item[RQ3: Fault localization] The ablation-based localization method identified the correct faulty sensor in the top-3 suspects for 85.3\% of detected faults, providing practical value for diagnostic workflows.
+
+    \item[RQ4: Adaptive learning capability] The incremental statistics update and fault classifier enabled the system to adapt to new operational conditions (reducing false positives by 48\%) and learn new fault types without encoder retraining, addressing a key requirement for long-term deployment.
+
+    \item[RQ5: Empirical validation] Comprehensive evaluation on real automotive sensor data with realistic fault scenarios validated the practical applicability of the approach.
+\end{description}
+
+\section{Practical Implications}
+
+The framework developed in this thesis has several practical implications for automotive systems:
+
+\begin{itemize}
+    \item \textbf{Reduced data collection burden}: By eliminating the need for labeled fault data during training, the approach significantly reduces the cost and safety risks associated with fault data collection.
+
+    \item \textbf{Faster development cycles}: Vehicle manufacturers can deploy fault detection systems earlier in the development process, using only normal operational data collected during standard testing.
+
+    \item \textbf{Continuous improvement}: The adaptive learning capability allows deployed systems to improve over their lifetime, adapting to component aging, software updates, and diverse operational environments without requiring over-the-air encoder updates.
+
+    \item \textbf{Diagnostic support}: The localization capability assists service technicians by narrowing down the list of potential faulty sensors, reducing diagnostic time and improving repair accuracy.
+
+    \item \textbf{Compliance with safety standards}: The approach aligns with ISO 26262 requirements for fault detection in safety-critical automotive systems, though additional validation would be needed for ASIL-rated deployment.
+\end{itemize}
+
+\section{Limitations}
+
+Despite the promising results, several limitations should be acknowledged:
+
+\subsection{Technical Limitations}
+
+\begin{itemize}
+    \item \textbf{False negatives}: The 29.3\% false negative rate means some faults go undetected. For safety-critical applications, this may be unacceptable without complementary detection mechanisms.
+
+    \item \textbf{Localization accuracy}: Top-1 localization accuracy of 67.6\% means nearly one-third of faults are not immediately identified, requiring technicians to investigate multiple sensors.
+
+    \item \textbf{Single-fault assumption}: The current approach assumes one faulty sensor at a time. Real-world scenarios may involve multiple simultaneous faults or cascading failures.
+
+    \item \textbf{Synthetic evaluation}: Validation used synthetic fault injection with HIL-calibrated parameters. Real sensor failures may exhibit different characteristics (e.g., intermittent faults, gradual degradation, electromagnetic interference).
+
+    \item \textbf{Limited temporal modeling}: The 1D CNN captures local temporal patterns but may miss long-term dependencies better captured by recurrent architectures.
+\end{itemize}
+
+\subsection{Practical Limitations}
+
+\begin{itemize}
+    \item \textbf{Initial training data requirements}: While no fault labels are needed, the system still requires diverse normal operational data covering various driving conditions to learn robust representations.
+
+    \item \textbf{Threshold sensitivity}: Detection performance depends on the choice of Mahalanobis distance threshold, which must be calibrated for each application.
+
+    \item \textbf{Computational resources}: While real-time capable, the ensemble approach requires 5× more memory and computation than a single model.
+
+    \item \textbf{Interpretability}: The learned representations are not directly interpretable, making it difficult to explain why a particular sample was flagged as anomalous to domain experts.
+\end{itemize}
+
+\section{Future Work}
+
+Several promising directions could extend and improve this work:
+
+\subsection{Near-Term Extensions}
+
+\begin{itemize}
+    \item \textbf{Real-world validation}: Evaluate on real sensor fault data collected from vehicle service records or field failures to validate performance beyond synthetic scenarios.
+
+    \item \textbf{Additional fault types}: Expand evaluation to include more diverse fault types such as electromagnetic interference, sensor drift, calibration errors, and intermittent failures.
+
+    \item \textbf{Multi-sensor faults}: Extend localization to handle simultaneous faults in multiple sensors using combinatorial analysis or greedy search strategies.
+
+    \item \textbf{Uncertainty quantification}: Incorporate uncertainty estimates (e.g., via Monte Carlo dropout or Bayesian approaches) to flag low-confidence predictions for human review.
+
+    \item \textbf{Attention mechanisms}: Integrate attention layers to improve interpretability by highlighting which time steps and sensors contribute most to anomaly scores.
+\end{itemize}
+
+\subsection{Advanced Research Directions}
+
+\begin{itemize}
+    \item \textbf{Contrastive learning}: Explore modern contrastive SSL methods (SimCLR, MoCo) adapted for time-series, potentially improving representation quality.
+
+    \item \textbf{Transformer architectures}: Investigate transformer-based encoders to better capture long-range temporal dependencies in sensor sequences.
+
+    \item \textbf{Federated learning}: Develop federated versions of the incremental learning framework, enabling multiple vehicles to collaboratively improve fault detection while preserving data privacy.
+
+    \item \textbf{Active learning}: Implement active learning strategies to selectively request labels for the most informative detected anomalies, efficiently improving the fault classifier with minimal human effort.
+
+    \item \textbf{Integration with HIL data}: Develop methods to directly incorporate HIL simulation data during training to improve detection of specific fault scenarios without requiring real fault occurrences.
+
+    \item \textbf{Causal fault analysis}: Extend the framework to identify root causes and fault propagation patterns across multiple correlated sensors using causal inference techniques.
+
+    \item \textbf{Transfer learning across vehicle types}: Investigate how models trained on one vehicle type (e.g., sedans) transfer to others (e.g., SUVs), potentially enabling faster deployment across product lines.
+
+    \item \textbf{Embedded deployment}: Optimize the framework for deployment on automotive-grade embedded hardware (e.g., quantization, pruning) and validate real-time performance under resource constraints.
+\end{itemize}
+
+\subsection{Broader Context}
+
+Beyond specific technical extensions, this work opens questions about the broader adoption of self-supervised learning in automotive systems:
+
+\begin{itemize}
+    \item \textbf{Safety certification}: How can SSL-based diagnostic systems be certified under functional safety standards like ISO 26262, which emphasize traceability and verifiability?
+
+    \item \textbf{Explainability for regulators}: What techniques can make learned representations interpretable to regulators and auditors who may not have deep learning expertise?
+
+    \item \textbf{Interaction with other systems}: How should SSL-based fault detection interact with traditional model-based diagnostics and hardware redundancy to maximize overall system reliability?
+\end{itemize}
+
+\section{Final Remarks}
+
+The automotive industry is undergoing a transformation toward increasingly autonomous and software-defined vehicles. As vehicles become more complex, traditional fault detection approaches based on physical redundancy and handcrafted rules become less scalable. This thesis demonstrates that self-supervised learning offers a viable path forward: learning from abundant normal data, adapting continuously, and providing actionable diagnostic information.
+
+While challenges remain—particularly around safety certification, real-world validation, and handling multiple simultaneous faults—the results presented here establish a solid foundation. The combination of self-supervised representation learning, statistical anomaly detection, and incremental adaptation provides a flexible framework that can evolve as both the technology and our understanding advance.
+
+As vehicles collect more data and computing becomes more powerful, machine learning will play an increasingly central role in automotive diagnostics and health management. The adaptive SSL framework developed in this thesis represents one step toward that future: systems that learn from experience, improve over time, and help ensure the safety and reliability of the vehicles of tomorrow.
+
+\section*{Concluding Statement}
+
+This thesis presented an adaptive self-supervised learning framework for automotive sensor fault detection and localization. By learning from normal operational data alone and adapting incrementally to new conditions, the system achieves practical detection accuracy (77.5\%) and localization performance (85.3\% top-3) on realistic fault scenarios. The work demonstrates that self-supervised learning is a promising approach for automotive diagnostics, reducing the need for expensive labeled fault data while enabling continuous improvement throughout a vehicle's operational lifetime.

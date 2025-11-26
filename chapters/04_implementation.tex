@@ -1,0 +1,257 @@
+\chapter{Implementation}
+\label{chap:implementation}
+
+This chapter describes the implementation details of our adaptive fault detection framework, including dataset preparation, model architecture specifics, training procedures, and fault injection methodology.
+
+\section{Dataset}
+
+\subsection{Audi A2D2 Dataset}
+
+We use the Audi Autonomous Driving Dataset (A2D2) \parencite{geiger2020a2d2}, which contains sensor data from an instrumented Audi test vehicle. The dataset includes:
+
+\begin{itemize}
+    \item Vehicle bus signals sampled at 100 Hz
+    \item Diverse driving scenarios including urban, highway, and rural environments
+    \item Various weather and lighting conditions
+    \item Multiple sensor types: speed, acceleration, steering angle, brake pressure, etc.
+\end{itemize}
+
+We focus on the vehicle bus signal data, which provides multivariate time-series of sensor readings from the \gls{can} bus.
+
+\subsection{Sensor Selection}
+
+From the available bus signals, we select 8 sensors that are critical for vehicle dynamics and safety:
+
+\begin{enumerate}
+    \item \textbf{Longitudinal acceleration} -- acceleration in forward/backward direction
+    \item \textbf{Lateral acceleration} -- acceleration in left/right direction
+    \item \textbf{Vehicle speed} -- current velocity of the vehicle
+    \item \textbf{Steering angle} -- angle of the steering wheel
+    \item \textbf{Yaw rate} -- rotational velocity around vertical axis
+    \item \textbf{Brake pressure} -- hydraulic pressure in brake system
+    \item \textbf{Throttle position} -- accelerator pedal position
+    \item \textbf{Wheel speeds} -- rotational speeds of individual wheels
+\end{enumerate}
+
+These sensors are chosen because they are commonly available in modern vehicles, are used by ADAS features, and their faults can significantly impact vehicle safety and performance.
+
+\subsection{Data Preprocessing}
+
+Raw sensor data undergoes several preprocessing steps:
+
+\begin{enumerate}
+    \item \textbf{Missing value handling}: Interpolate or remove sequences with excessive missing values
+    \item \textbf{Normalization}: Apply z-score normalization per sensor channel:
+    \begin{equation}
+    \tilde{x}_i = \frac{x_i - \mu_i}{\sigma_i}
+    \end{equation}
+    where $\mu_i$ and $\sigma_i$ are the mean and standard deviation of sensor $i$ computed from training data
+    \item \textbf{Windowing}: Segment time-series into fixed-length windows of $T=50$ time steps (0.5 seconds at 100 Hz)
+    \item \textbf{Stride}: Use stride of 25 for training (50\% overlap) to increase training samples; use stride of 50 for testing (no overlap) to evaluate independent samples
+\end{enumerate}
+
+\subsection{Train-Validation-Test Split}
+
+We split the dataset temporally to simulate realistic deployment:
+
+\begin{itemize}
+    \item \textbf{Training set}: First 70\% of driving sessions, used for SSL encoder training
+    \item \textbf{Validation set}: Next 15\%, used for threshold calibration and hyperparameter tuning
+    \item \textbf{Test set}: Final 15\%, used for final evaluation with fault injection
+\end{itemize}
+
+Importantly, only \textit{normal} (fault-free) data is used for training and validation. Faults are injected only into the test set.
+
+\section{Model Architecture and Training}
+
+\subsection{Encoder Architecture Details}
+
+The 1D CNN encoder is implemented in PyTorch with the following architecture:
+
+\begin{table}[htbp]
+\centering
+\caption{Encoder architecture specifications}
+\label{tab:encoder_arch}
+\begin{tabular}{@{}lcccc@{}}
+\toprule
+Layer & Kernel Size & Stride & Channels Out & Activation \\
+\midrule
+Conv1D-1 & 7 & 1 & 64 & ReLU \\
+BatchNorm1D & - & - & 64 & - \\
+Conv1D-2 & 5 & 1 & 128 & ReLU \\
+BatchNorm1D & - & - & 128 & - \\
+Conv1D-3 & 3 & 1 & 256 & ReLU \\
+BatchNorm1D & - & - & 256 & - \\
+GlobalAvgPool1D & - & - & 256 & - \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The output is a 256-dimensional embedding vector. A classification head (linear layer + softmax) is attached during SSL training but discarded afterward.
+
+\subsection{Training Procedure}
+
+\paragraph{Pretext Task Training}
+
+The encoder is trained on the transformation classification task with the following hyperparameters:
+
+\begin{itemize}
+    \item \textbf{Optimizer}: Adam with learning rate $\eta = 0.001$
+    \item \textbf{Batch size}: 128
+    \item \textbf{Epochs}: 50 (with early stopping based on validation loss)
+    \item \textbf{Loss function}: Cross-entropy
+    \item \textbf{Regularization}: Weight decay of $10^{-5}$
+    \item \textbf{Transformation parameters}: Jitter noise std $\sigma = 0.1$, masking ratio $p = 0.15$
+\end{itemize}
+
+We train 5 models with different random seeds to create an ensemble.
+
+\paragraph{Threshold Calibration}
+
+After training, we extract embeddings from the validation set and compute Mahalanobis distances. The threshold $\tau$ is set to the 90th percentile of these distances, targeting a 10\% false positive rate on normal data.
+
+\subsection{Computational Efficiency}
+
+The encoder has approximately 180K parameters. On a standard GPU (NVIDIA RTX 2060), inference time per window is $\sim$0.5 ms, enabling real-time operation. Training takes approximately 2 hours for 50 epochs.
+
+\section{Fault Injection Methodology}
+
+To evaluate the framework, we inject synthetic faults into the test set. The fault types and parameters are calibrated using \gls{hil} testing data to ensure realism.
+
+\subsection{HIL-Calibrated Fault Ranges}
+
+HIL test data provides realistic bounds for sensor fault magnitudes. We analyze historical HIL logs to determine typical fault ranges:
+
+\begin{table}[htbp]
+\centering
+\caption{HIL-calibrated fault injection parameters}
+\label{tab:fault_params}
+\begin{tabular}{@{}lll@{}}
+\toprule
+Fault Type & Description & Parameter Range \\
+\midrule
+Offset & Constant bias added to sensor & $[-2\sigma, 2\sigma]$ \\
+Scaling & Multiplicative factor & $[0.5, 2.0]$ \\
+Noise & Added Gaussian noise & std $\in [0.5\sigma, 2\sigma]$ \\
+Drift & Linearly increasing bias & slope $\in [-0.1\sigma, 0.1\sigma]$ per step \\
+Dropout & Intermittent signal loss & dropout rate $\in [0.1, 0.5]$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+where $\sigma$ is the standard deviation of the sensor's normal values.
+
+\subsection{Multi-Run Fault Injection Protocol}
+
+To ensure statistical validity, we perform multiple fault injection runs:
+
+\begin{enumerate}
+    \item \textbf{Random selection}: For each run, randomly select $N_f$ windows from the test set
+    \item \textbf{Random fault type}: Assign a random fault type from Table~\ref{tab:fault_params}
+    \item \textbf{Random sensor}: Select a random sensor to be faulty (ground truth for localization)
+    \item \textbf{Random parameters}: Sample fault parameters uniformly from the calibrated ranges
+    \item \textbf{Fault application}: Apply the fault to the selected sensor in the selected window
+\end{enumerate}
+
+We perform 15 independent runs with different random seeds, generating a total of 58 faulty samples for robust evaluation.
+
+\subsection{Rationale for Synthetic Faults}
+
+While synthetic faults are not perfect representations of real-world failures, they offer several advantages:
+
+\begin{itemize}
+    \item \textbf{Controlled experiments}: Known ground truth for fault type and location
+    \item \textbf{Coverage}: Can test diverse fault scenarios systematically
+    \item \textbf{Reproducibility}: Results can be replicated exactly
+    \item \textbf{Safety}: No need to induce real faults in operational vehicles
+    \item \textbf{HIL calibration}: Parameters grounded in realistic ranges from HIL testing
+\end{itemize}
+
+Future work will validate on real fault data collected from vehicle service records.
+
+\section{Incremental Learning Implementation}
+
+\subsection{Incremental Statistics Update}
+
+The incremental mean and covariance update is implemented using NumPy with efficient vectorized operations. Covariance matrices are stored in memory (256×256 for our embedding dimension), requiring $\sim$0.5 MB per model.
+
+When new normal data arrives:
+\begin{enumerate}
+    \item Extract embeddings using frozen encoder (batch processing for efficiency)
+    \item Update mean and covariance using parallel algorithm (see Chapter~\ref{chap:methodology})
+    \item Recompute threshold if desired (or keep fixed based on validation data)
+\end{enumerate}
+
+Update time for 1000 new samples is $\sim$100 ms, enabling near-real-time adaptation.
+
+\subsection{Incremental Fault Classifier}
+
+The fault classifier is implemented using scikit-learn's SGDClassifier with the following configuration:
+
+\begin{itemize}
+    \item \textbf{Loss}: Log loss (equivalent to logistic regression)
+    \item \textbf{Learning rate}: Adaptive
+    \item \textbf{Regularization}: L2 penalty with $\alpha = 10^{-4}$
+    \item \textbf{Warm start}: Enabled to allow incremental training
+\end{itemize}
+
+The classifier is initialized with all possible fault classes specified upfront. New labeled fault samples can be added via \texttt{partial\_fit()}, which updates the model without retraining from scratch.
+
+\section{Evaluation Metrics}
+
+We evaluate the framework using standard metrics:
+
+\subsection{Detection Metrics}
+
+\begin{itemize}
+    \item \textbf{Accuracy}: Fraction of correctly classified samples (fault vs.\ normal)
+    \item \textbf{Precision}: $\frac{\text{TP}}{\text{TP} + \text{FP}}$ (fraction of detected faults that are true faults)
+    \item \textbf{Recall}: $\frac{\text{TP}}{\text{TP} + \text{FN}}$ (fraction of true faults that are detected)
+    \item \textbf{F1-Score}: Harmonic mean of precision and recall: $2 \frac{\text{Precision} \times \text{Recall}}{\text{Precision} + \text{Recall}}$
+    \item \textbf{ROC-AUC}: Area under the Receiver Operating Characteristic curve \parencite{fawcett2006introduction}
+\end{itemize}
+
+\subsection{Localization Metrics}
+
+\begin{itemize}
+    \item \textbf{Top-1 Accuracy}: Fraction of faults where the top-ranked sensor is correct
+    \item \textbf{Top-3 Accuracy}: Fraction of faults where the correct sensor is in top 3 ranked
+    \item \textbf{Mean Reciprocal Rank (MRR)}: $\frac{1}{|Q|} \sum_{i=1}^{|Q|} \frac{1}{\text{rank}_i}$ where $\text{rank}_i$ is the position of the correct sensor
+\end{itemize}
+
+\subsection{Statistical Significance}
+
+We report 95\% confidence intervals for accuracy metrics using the Wilson score interval:
+
+\begin{equation}
+\text{CI} = \frac{\hat{p} + \frac{z^2}{2n} \pm z\sqrt{\frac{\hat{p}(1-\hat{p})}{n} + \frac{z^2}{4n^2}}}{1 + \frac{z^2}{n}}
+\end{equation}
+
+where $\hat{p}$ is the observed proportion, $n$ is the sample size, and $z = 1.96$ for 95\% confidence.
+
+\section{Implementation Tools}
+
+The framework is implemented using:
+\begin{itemize}
+    \item \textbf{Python 3.8} as the primary programming language
+    \item \textbf{PyTorch 1.9} for neural network implementation and training
+    \item \textbf{NumPy} for numerical operations
+    \item \textbf{scikit-learn} for incremental classifier and evaluation metrics
+    \item \textbf{pandas} for data manipulation
+    \item \textbf{matplotlib} and \textbf{seaborn} for visualization
+\end{itemize}
+
+The complete implementation is available in a Jupyter notebook for reproducibility.
+
+\section{Summary}
+
+This chapter detailed the implementation of our adaptive fault detection framework, including:
+\begin{itemize}
+    \item Dataset preparation and preprocessing from Audi A2D2
+    \item 1D CNN encoder architecture and training procedure
+    \item HIL-calibrated fault injection methodology
+    \item Incremental learning implementation
+    \item Evaluation metrics and statistical validation
+\end{itemize}
+
+The next chapter presents experimental results and analysis.

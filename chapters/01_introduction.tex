@@ -1,0 +1,69 @@
+\chapter{Introduction}
+\label{chap:introduction}
+
+\section{Motivation}
+
+Modern vehicles have evolved into complex cyber-physical systems, incorporating hundreds of sensors to enable \gls{adas}, improve safety, and enhance user experience. These sensors monitor critical parameters such as speed, acceleration, steering angle, brake pressure, and environmental conditions. The reliability of these sensors is paramount, as sensor faults can lead to incorrect decision-making by automated systems, potentially compromising vehicle safety and performance \parencite{iso26262_2018}.
+
+According to the ISO 26262 functional safety standard, automotive systems must detect and respond to sensor failures to maintain safe operation \parencite{iso26262_2018}. Traditional fault detection approaches rely on physical redundancy (duplicate sensors) or analytical redundancy (mathematical models), but these methods have limitations: physical redundancy increases cost and complexity, while model-based approaches require extensive domain knowledge and may not generalize well to diverse operating conditions.
+
+Recent advances in \gls{ml} and \gls{ai} offer promising alternatives for sensor fault detection. However, supervised learning approaches require large labeled datasets of fault conditions, which are difficult and expensive to collect in real-world automotive applications. Intentionally inducing sensor faults in operational vehicles poses safety risks, and naturally occurring faults are rare events that may not cover all failure modes.
+
+\section{Problem Statement}
+
+The key challenge addressed in this thesis is: \textit{How can we detect and localize sensor faults in automotive systems without requiring extensive labeled fault data, while enabling the system to adapt continuously to new operational patterns?}
+
+This problem is particularly relevant because:
+
+\begin{itemize}
+    \item \textbf{Data scarcity}: Labeled fault data is expensive to acquire and may not represent all possible fault scenarios
+    \item \textbf{Operational variability}: Vehicles operate under diverse conditions (weather, driving styles, road types) that affect sensor behavior
+    \item \textbf{Evolving systems}: Automotive systems are updated over their lifetime, requiring fault detection to adapt without complete retraining
+    \item \textbf{Real-time constraints}: Fault detection must operate efficiently on embedded automotive hardware
+\end{itemize}
+
+\section{Research Objectives}
+
+The primary objective of this thesis is to develop an adaptive fault detection and localization framework for automotive sensors using \gls{ssl}. Specific objectives include:
+
+\begin{enumerate}
+    \item \textbf{Self-supervised representation learning}: Develop a method to learn meaningful sensor data representations using only normal (fault-free) operational data
+    \item \textbf{Fault detection without labeled examples}: Design an anomaly detection mechanism that can identify sensor faults without requiring fault examples during training
+    \item \textbf{Fault localization}: Implement a technique to identify which specific sensor(s) are faulty when an anomaly is detected
+    \item \textbf{Adaptive learning capability}: Enable the system to update its models incrementally as new operational data becomes available, without retraining from scratch
+    \item \textbf{Empirical validation}: Evaluate the approach on real automotive sensor data with realistic fault injection scenarios
+\end{enumerate}
+
+\section{Contributions}
+
+This thesis makes the following contributions:
+
+\begin{itemize}
+    \item \textbf{SSL-based automotive fault detection framework}: A novel application of self-supervised learning to automotive sensor fault detection, using transformation classification as the pretext task
+
+    \item \textbf{Adaptive anomaly detection}: An incremental learning mechanism for Mahalanobis distance-based anomaly detection that updates statistical models without retraining the feature encoder
+
+    \item \textbf{Incremental fault classifier}: A framework for continuously learning new fault patterns using online learning algorithms, enabling adaptation to previously unseen fault types
+
+    \item \textbf{Ablation-based fault localization}: A method to identify faulty sensors by systematically masking individual sensors and analyzing the impact on anomaly scores
+
+    \item \textbf{HIL-calibrated evaluation}: Comprehensive evaluation using Hardware-in-the-Loop calibrated fault ranges on the Audi A2D2 dataset, demonstrating practical applicability
+
+    \item \textbf{Statistical validation}: Rigorous statistical analysis including confidence intervals, precision-recall metrics, and ROC-AUC analysis across multiple experimental runs
+\end{itemize}
+
+\section{Thesis Structure}
+
+The remainder of this thesis is organized as follows:
+
+\begin{description}
+    \item[Chapter \ref{chap:related_work}] reviews related work on self-supervised learning, anomaly detection, automotive fault diagnosis, and incremental learning approaches.
+
+    \item[Chapter \ref{chap:methodology}] describes the proposed methodology, including the SSL pretext task, the 1D CNN encoder architecture, Mahalanobis distance-based anomaly detection, ablation-based localization, and the adaptive learning framework.
+
+    \item[Chapter \ref{chap:implementation}] details the implementation, including dataset preparation, model architecture specifics, training procedures, and fault injection methodology.
+
+    \item[Chapter \ref{chap:results}] presents experimental results, including detection accuracy, localization performance, ablation studies, and comparison with baselines.
+
+    \item[Chapter \ref{chap:conclusion}] concludes the thesis with a summary of findings, limitations of the current approach, and directions for future research.
+\end{description}
