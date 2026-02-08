@@ -1,0 +1,102 @@
+\chapter{Related Work}\label{ch:related_work}
+
+This chapter reviews current research at the intersection of self-supervised learning, contrastive representation learning, and fault detection in industrial and automotive systems. The review is organized thematically, beginning with SSL methods for fault diagnosis, followed by contrastive learning frameworks, anomaly detection with learned representations, and deep learning for automotive applications. Each section identifies the contributions and limitations of existing work. The chapter concludes with a summary of research gaps that motivate the approach presented in this thesis.
+
+\section{Self-Supervised Learning for Fault Diagnosis}\label{sec:rw_ssl_fd}
+
+The application of self-supervised learning to fault diagnosis has gained significant attention in recent years, driven by the practical difficulty of obtaining labeled fault data in industrial settings.
+
+\textcite{xu2024self} present a comprehensive review of SSL methods for machinery fault diagnosis, covering contrastive, generative, and predictive approaches. Their survey of over 100 publications identifies contrastive learning as the most effective paradigm for downstream fault classification, particularly when labeled data is scarce. The authors note that most SSL-based methods have been evaluated on benchmark bearing datasets (CWRU, Paderborn) rather than on automotive sensor data, and that the cross-domain transfer capability of these methods remains underexplored.
+
+\textcite{wang2023self} propose a self-supervised framework for bearing fault diagnosis that combines contrastive learning with wavelet-based time-frequency analysis. The method achieves 95.3\% accuracy on the CWRU bearing dataset when fine-tuned with only 10\% of the available labels. While demonstrating the value of SSL pretraining for reducing label requirements, the approach still relies on a labeled fine-tuning stage to adapt the learned representations to specific fault classes. In contrast, the framework proposed in this thesis operates without any labeled fault data, using the SSL-learned representations directly for anomaly detection.
+
+\textcite{ding2022self} introduce a self-supervised pretraining method based on contrastive predictive coding (CPC) for incipient fault detection in bearings. CPC learns by predicting future signal segments in the latent space, capturing temporal dependencies that are informative for early-stage fault detection. The approach achieves strong results on vibration data, detecting subtle faults before they become severe. However, CPC is designed for sequential prediction and may not capture the multi-scale patterns present in automotive sensor signals, where different fault types manifest at different temporal scales.
+
+\textcite{li2023contrastive} address the specific challenge of fault diagnosis under limited labeled data by combining contrastive learning with a semi-supervised classifier. Their method, evaluated on rolling bearing data, uses contrastive pretraining to learn general signal features, followed by a classifier trained on a small labeled subset. The authors report accuracy above 90\% with as few as 10 labeled samples per fault class. While the semi-supervised strategy is practical, the requirement for even a small labeled set poses challenges in scenarios where certain fault types have never been observed.
+
+\textcite{zhang2023self_vibration} apply self-supervised learning to vibration signal analysis, proposing a masked autoencoder that reconstructs randomly masked portions of the input signal. The reconstructive pretext task forces the encoder to learn the underlying signal dynamics, and the resulting representations transfer well to downstream fault classification. The method achieves competitive performance under label-scarce conditions, but the generative reconstruction objective may not produce embeddings that are as discriminative for anomaly detection as those learned through contrastive objectives.
+
+\section{Contrastive Learning Frameworks}\label{sec:rw_cl}
+
+The development of contrastive learning methods has progressed rapidly, with several landmark frameworks shaping the field.
+
+\textcite{chen2020simple} introduced SimCLR, demonstrating that strong contrastive representations can be learned with a simple framework consisting of data augmentations, a base encoder, a projection head, and the NT-Xent loss. Key findings include: (1)~composition of multiple data augmentations is critical, (2)~a learnable nonlinear projection head between the representation and the loss substantially improves quality, (3)~larger batch sizes benefit contrastive learning by providing more negative examples, and (4)~the temperature parameter in the NT-Xent loss must be carefully tuned. SimCLR achieves 76.5\% top-1 accuracy on ImageNet under linear evaluation, matching a supervised ResNet-50. The simplicity and effectiveness of SimCLR make it a natural starting point for adapting contrastive learning to new domains, including time-series data.
+
+\textcite{he2020momentum} propose Momentum Contrast (MoCo), which addresses the batch size limitation of SimCLR by maintaining a large, dynamically updated dictionary of negative examples through a momentum-updated encoder. MoCo decouples the dictionary size from the mini-batch size, enabling contrastive learning with standard batch sizes on commodity hardware. While MoCo offers practical advantages for resource-constrained settings, SimCLR's simpler architecture is preferred in this thesis for clarity and reproducibility.
+
+\textcite{grill2020bootstrap} introduce Bootstrap Your Own Latent (BYOL), which challenges the assumption that negative examples are necessary for contrastive learning. BYOL uses an asymmetric architecture with a student network and a momentum-updated teacher network, learning by making the student's representations match the teacher's without any negative pairs. This eliminates the batch size sensitivity inherent in SimCLR but introduces additional architectural complexity. The absence of negative pairs also makes it less straightforward to interpret the learned embedding space for anomaly detection purposes.
+
+\textcite{oord2018representation} propose Contrastive Predictive Coding (CPC), a framework that learns representations by predicting future observations in the latent space. CPC is particularly relevant for sequential data because it explicitly models temporal structure through an autoregressive architecture. However, the directional (past-to-future) prediction may not capture all patterns relevant to fault detection, where anomalies can affect any part of a window.
+
+For time-series applications specifically, \textcite{yue2022ts2vec} propose TS2Vec, which performs contrastive learning hierarchically over augmented context views at multiple temporal scales. TS2Vec achieves state-of-the-art results on time-series classification, forecasting, and anomaly detection benchmarks by capturing both local and global temporal patterns. \textcite{eldele2021time} introduce TS-TCC, which designs two augmentation strategies for temporal data---weak augmentation (jittering, scaling) and strong augmentation (permutation, masking)---and applies contrastive learning between the resulting views. These time-series-specific frameworks inform the augmentation design used in this thesis.
+
+\textcite{zhang2022self} propose a contrastive learning method that enforces consistency between time-domain and frequency-domain representations of the same signal. By contrasting signals in both domains, the encoder learns features that capture both temporal dynamics and spectral characteristics. While this dual-domain approach is promising, the automotive sensor signals in this thesis (accelerator position, vehicle speed) are relatively low-frequency, and the additional complexity of frequency-domain processing is not justified.
+
+\section{Anomaly Detection with Self-Supervised Representations}\label{sec:rw_anomaly}
+
+The combination of self-supervised representation learning with anomaly detection methods has emerged as a powerful paradigm for identifying out-of-distribution samples.
+
+\textcite{ruff2021unifying} provide a unifying theoretical framework for deep anomaly detection, establishing connections between one-class classification, contrastive learning, and classical shallow methods (one-class SVM, isolation forests). Their analysis demonstrates that self-supervised pretraining followed by simple anomaly scoring in the learned feature space consistently outperforms end-to-end trained anomaly detectors. This finding supports the two-stage approach used in this thesis: contrastive pretraining followed by cosine similarity-based scoring.
+
+\textcite{pang2021deep} review deep learning methods for anomaly detection and identify three fundamental challenges: (1)~learning effective anomaly representations with limited or no labeled anomalies, (2)~detecting complex anomalies that affect multiple features simultaneously, and (3)~providing interpretable detection results. The first two challenges are directly addressed by the framework in this thesis---contrastive pretraining eliminates the need for labeled anomalies, and the multi-sensor windows capture cross-sensor fault effects.
+
+\textcite{liu2023self} survey self-supervised methods specifically designed for anomaly detection, distinguishing between methods that model the data distribution directly and those that learn transformation-invariant representations. They identify contrastive learning as particularly suitable for anomaly detection because the learned embeddings naturally separate in-distribution (normal) and out-of-distribution (anomalous) samples.
+
+\section{Deep Learning for Automotive Fault Detection}\label{sec:rw_automotive}
+
+Fault detection in automotive systems has traditionally relied on model-based methods (observer-based, parity equation, Kalman filter) and threshold monitoring. The adoption of deep learning has expanded the scope and accuracy of data-driven detection.
+
+\textcite{zhao2024deep} review deep learning approaches for automotive sensor fault detection, covering CNNs, RNNs, LSTM networks, and hybrid architectures. The authors identify the scarcity of labeled fault data as the primary barrier to wider adoption and suggest self-supervised and transfer learning as promising directions for future research. This thesis directly addresses this identified gap.
+
+\textcite{abboush2022intelligent} propose a hybrid deep learning framework combining CNNs for spatial feature extraction with GRUs for temporal modeling, applied to HIL test data from a dSPACE simulator with a gasoline engine model. The method achieves high classification accuracy for both fault type and fault location identification. However, the approach is fully supervised, requiring labeled examples of every fault type and location for training. The HIL testing infrastructure and fault injection methodology developed in that work provide the foundation for the test data used in this thesis.
+
+\textcite{ghannoum2025explainable} extend the work of \textcite{abboush2022intelligent} by integrating Explainable AI (XAI) techniques---Integrated Gradients, DeepLIFT, Gradient SHAP, and DeepLIFT SHAP---into the fault detection pipeline. The Fault Location Model (FLM) achieves 97.40\% accuracy, and the Fault Type Model (FTM) achieves 97.19\% accuracy. The XAI analysis identifies the most important features for each fault class and reduces the feature set from 24 to 10 with minimal accuracy loss. While achieving impressive results, this work requires fully labeled datasets and cannot detect fault types not present in the training data.
+
+\textcite{chen2023transfer} survey transfer learning for bearing fault diagnosis, finding that domain adaptation methods can bridge the gap between source and target data distributions. Their review highlights the practical scenario where models trained on laboratory data must be deployed on real-world equipment---analogous to the A2D2-to-HIL transfer scenario addressed in this thesis.
+
+\textcite{tang2024self} review self-supervised learning for automotive perception tasks, covering camera-based and LiDAR-based applications. While focused primarily on perception rather than fault detection, this work demonstrates the viability of SSL methods in the automotive domain and identifies data augmentation design as a critical factor for success.
+
+\section{Review Summary and Research Gaps}\label{sec:review_gaps}
+
+Table~\ref{tab:related_work_comparison} provides a structured comparison of the reviewed approaches against the proposed method.
+
+\begin{table}[H]
+\centering
+\caption{Comparison of the proposed approach with existing methods.}
+\label{tab:related_work_comparison}
+\renewcommand{\arraystretch}{1.3}
+\small
+\begin{tabular}{p{3.2cm} c c c c c}
+\toprule
+\textbf{Method} & \textbf{SSL} & \textbf{No Labels} & \textbf{Automotive} & \textbf{HIL} & \textbf{Transfer} \\
+\midrule
+Abboush et al. \parencite{abboush2022intelligent} & \texttimes & \texttimes & \checkmark & \checkmark & \texttimes \\
+Ghannoum \parencite{ghannoum2025explainable} & \texttimes & \texttimes & \checkmark & \checkmark & \texttimes \\
+Wang et al. \parencite{wang2023self} & \checkmark & \texttimes\textsuperscript{*} & \texttimes & \texttimes & \texttimes \\
+Ding et al. \parencite{ding2022self} & \checkmark & \texttimes\textsuperscript{*} & \texttimes & \texttimes & \texttimes \\
+Li et al. \parencite{li2023contrastive} & \checkmark & \texttimes\textsuperscript{*} & \texttimes & \texttimes & \texttimes \\
+Zhang et al. \parencite{zhang2023self_vibration} & \checkmark & \texttimes\textsuperscript{*} & \texttimes & \texttimes & \texttimes \\
+\textbf{This thesis} & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark \\
+\bottomrule
+\end{tabular}
+\\[0.5em]
+\textsuperscript{*}Requires labeled data for fine-tuning or classifier training.
+\end{table}
+
+The following research gaps are identified from the literature review:
+
+\begin{enumerate}
+    \item \textbf{Domain limitation.} The majority of SSL-based fault detection research targets rotating machinery (bearings, motors) using vibration signals. Applications to automotive sensor systems remain scarce.
+
+    \item \textbf{Residual label dependency.} Most SSL approaches reduce rather than eliminate the need for labeled fault data, requiring at least a small labeled set for fine-tuning or semi-supervised classification.
+
+    \item \textbf{Cross-domain validation.} Few works evaluate the transfer of SSL-learned representations between different data acquisition systems (e.g., from real test drives to HIL simulators), which is a critical practical requirement for deployment.
+
+    \item \textbf{Threshold analysis.} Detection performance is typically reported at a single operating point, without systematically exploring the effect of threshold selection on the precision--recall trade-off.
+
+    \item \textbf{Incomplete evaluation.} Many studies report only accuracy, omitting precision, recall, F1-score, confusion matrices, and ROC analysis that are essential for assessing performance in safety-critical applications.
+
+    \item \textbf{Missing cost analysis.} Computational cost analysis (training time, inference time) is frequently absent, making it difficult to assess the practical feasibility of deployment.
+\end{enumerate}
+
+This thesis addresses all six gaps: it applies contrastive SSL to automotive sensors, requires zero labeled fault data, demonstrates A2D2-to-HIL transfer, evaluates six threshold settings, reports comprehensive metrics for all experiments, and measures computational costs for all pipeline stages.

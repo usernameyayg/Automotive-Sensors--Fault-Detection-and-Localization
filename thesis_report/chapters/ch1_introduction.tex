@@ -1,0 +1,73 @@
+\chapter{Introduction}\label{ch:introduction}
+\pagenumbering{arabic}
+
+\section{Context and Motivation}\label{sec:context}
+
+Modern vehicles rely on a growing network of Electronic Control Units (ECUs) that continuously process data from dozens of sensors to govern safety-critical functions such as engine management, braking, and steering \parencite{abboush2022intelligent}. A single mid-range passenger car today can contain more than 70~ECUs communicating over Controller Area Network (CAN) buses, each dependent on accurate sensor readings to maintain safe operation. When a sensor produces faulty measurements---whether due to electrical interference, mechanical degradation, or component failure---the downstream control logic may issue incorrect commands, potentially leading to hazardous situations for occupants and other road users.
+
+The ISO~26262 standard for functional safety of road vehicles mandates rigorous testing and validation of these systems, including Hardware-in-the-Loop (HIL) simulation and real-world test drives \parencite{iso26262_2018}. During such validation campaigns, vast quantities of time-series sensor data are recorded, often exceeding several gigabytes per test session. Manual inspection of this data by domain experts is not only time-consuming but also prone to human oversight, particularly for subtle or intermittent faults that may not produce immediately obvious signal distortions.
+
+Artificial intelligence offers a path toward automated fault detection. Supervised deep learning methods, including Convolutional Neural Networks (CNNs) combined with Gated Recurrent Units (GRUs), have demonstrated strong performance in classifying fault types and locations within automotive systems \parencite{ghannoum2025explainable, abboush2022intelligent}. However, these approaches depend on large, labeled datasets that include examples of every fault type the model is expected to recognize. Collecting such labeled fault data requires deliberate fault injection campaigns and manual annotation---a process that is expensive, time-intensive, and inherently incomplete, since it cannot cover every conceivable fault mode that may arise in practice.
+
+Self-supervised learning (SSL) offers a fundamentally different paradigm. Rather than learning from labeled examples, SSL methods extract supervisory signals from the structure of the data itself \parencite{jaiswal2021survey}. In the context of fault detection, this means a model can learn what \emph{normal} sensor behavior looks like by training exclusively on healthy data, which is abundantly available from routine test drives. Any subsequent deviation from the learned normal patterns can then be flagged as a potential anomaly, without ever having seen a single labeled fault example during training.
+
+Among SSL approaches, contrastive learning has emerged as particularly effective for representation learning \parencite{chen2020simple}. The core principle is to train an encoder network such that similar inputs (augmented views of the same data sample) produce similar representations, while dissimilar inputs produce distant representations. SimCLR \parencite{chen2020simple}, one of the most widely adopted contrastive frameworks, has demonstrated state-of-the-art results across diverse domains, yet its application to automotive sensor fault detection remains largely unexplored.
+
+This thesis investigates whether contrastive self-supervised learning, trained solely on healthy driving data from the Audi Autonomous Driving Dataset (A2D2) \parencite{a2d2_2020}, can effectively detect sensor faults injected through a HIL simulation environment. The work addresses a practical scenario: a model trained on real-world driving data from one vehicle is deployed to detect faults in a different data acquisition system (HIL test bench), testing the cross-domain generalization capability of the learned representations.
+
+\section{Research Questions}\label{sec:rqs}
+
+This thesis addresses the following research questions:
+
+\begin{itemize}
+    \item \textbf{RQ1:} Can a contrastive self-supervised learning model, trained exclusively on healthy sensor data from real-world driving recordings, reliably detect sensor faults in HIL simulation data without any labeled fault examples?
+
+    \item \textbf{RQ2:} How does the selection of the anomaly detection threshold affect the trade-off between detection sensitivity (recall) and false alarm rate (precision), and what threshold range is most suitable for safety-critical automotive applications?
+
+    \item \textbf{RQ3:} Which types of sensor faults (gain, noise, stuck-at) are most and least detectable by the proposed approach, and what physical factors explain the observed differences?
+\end{itemize}
+
+\section{Related Work}\label{sec:intro_related}
+
+A detailed review of relevant literature is provided in Chapter~\ref{ch:related_work}. In brief, prior work on automotive fault detection has predominantly relied on supervised learning with labeled fault data \parencite{abboush2022intelligent, ghannoum2025explainable}. Self-supervised methods have been applied to fault diagnosis in rotating machinery (bearings, motors) \parencite{wang2023self, ding2022self, li2023contrastive}, but their adoption for automotive sensor systems remains limited. Furthermore, most existing SSL-based approaches still require a small number of labeled fault examples for fine-tuning, whereas the approach proposed here operates in a fully unsupervised fashion after pretraining.
+
+\section{Solution}\label{sec:solution}
+
+The proposed framework operates in three distinct phases:
+
+\begin{enumerate}
+    \item \textbf{Self-supervised pretraining.} A one-dimensional CNN encoder is trained on the SimCLR contrastive learning objective using healthy driving data from the A2D2 dataset. The encoder learns to map time-series sensor windows into a compact embedding space where semantically similar windows are placed close together. Three domain-specific augmentation strategies---Gaussian jittering, amplitude scaling, and temporal masking---generate the positive pairs required for contrastive training.
+
+    \item \textbf{Anomaly detection calibration.} A small quantity of healthy HIL data (approximately 90~seconds) is passed through the frozen encoder to establish a reference distribution in the embedding space. The centroid of the healthy embeddings and the distribution of cosine similarities to that centroid are computed, and detection thresholds are set at multiple percentiles of this distribution.
+
+    \item \textbf{Fault detection and evaluation.} HIL data containing injected faults (gain, noise, and stuck-at types across accelerator pedal and vehicle speed sensors) is evaluated against the calibrated thresholds. Performance is assessed using precision, recall, F1-score, accuracy, confusion matrices, and Receiver Operating Characteristic (ROC) curves across multiple threshold settings.
+\end{enumerate}
+
+\section{Objective}\label{sec:objective}
+
+The primary objective of this thesis is to develop, implement, and evaluate a self-supervised contrastive learning framework for automotive sensor fault detection that satisfies the following requirements:
+
+\begin{enumerate}
+    \item Requires no labeled fault data during any phase of training or calibration.
+    \item Achieves reliable detection of gain, noise, and stuck-at sensor faults in HIL simulation data.
+    \item Provides a systematic multi-threshold analysis (15th through 40th percentile) to quantify the sensitivity--specificity trade-off.
+    \item Demonstrates cross-domain transfer from real-world A2D2 data to HIL data.
+    \item Reports all evaluation metrics mandated for safety-critical systems: precision, recall, F1-score, accuracy, confusion matrices, and ROC curves with AUC values.
+    \item Documents computational costs for training and inference to assess deployment feasibility.
+\end{enumerate}
+
+\section{Structure}\label{sec:structure}
+
+The remainder of this thesis is organized as follows:
+
+\begin{itemize}
+    \item \textbf{Chapter~\ref{ch:background}: Background.} Introduces the theoretical foundations, including model-based development and testing phases in the automotive V-model, the real test drive validation process, fault injection approaches, contrastive self-supervised learning with detailed mathematical formulations, and anomaly detection methods.
+
+    \item \textbf{Chapter~\ref{ch:related_work}: Related Work.} Reviews current research in self-supervised learning for fault detection and diagnosis, contrastive learning frameworks, anomaly detection with learned representations, and deep learning for automotive fault detection. Research gaps addressed by this thesis are identified.
+
+    \item \textbf{Chapter~\ref{ch:methodology}: Methodology, Implementation, and Results.} Presents the complete system architecture, followed by detailed descriptions of each component: data preprocessing (A2D2 loading, normalization, windowing), dataset fusion with HIL data, SimCLR training implementation, and anomaly detection with multi-threshold evaluation. Intermediate results and visualizations are included throughout.
+
+    \item \textbf{Chapter~\ref{ch:results}: Results and Discussion.} Reports the full evaluation results, including per-fault detection performance across six thresholds, binary classification results (healthy vs.\ faulty), ROC analysis, per-fault-type analysis, and computing cost measurements. A detailed discussion interprets the findings in the context of practical automotive deployment.
+
+    \item \textbf{Chapter~\ref{ch:conclusion}: Conclusion and Future Work.} Summarizes the contributions, answers the research questions, and outlines directions for future research.
+\end{itemize}
