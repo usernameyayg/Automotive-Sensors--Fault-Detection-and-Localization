@@ -1,0 +1,340 @@
+\chapter{Background}\label{ch:background}
+
+This chapter introduces the theoretical foundations required to understand the proposed fault detection framework. It covers the automotive development and validation process, fault injection techniques used in HIL testing, the fundamentals of deep learning for time-series data, and---most critically---a detailed treatment of contrastive self-supervised learning with full mathematical formulations.
+
+\section{Model-Based Development and Testing Phases}\label{sec:mbd}
+
+Model-Based Development (MBD) has become the standard methodology in the automotive industry for designing and validating embedded software systems. MBD uses mathematical and simulation models to facilitate early design validation and verification, following the V-model development lifecycle \parencite{abboush2022intelligent}. The left side of the V-model represents the design and development stages, while the right side represents the corresponding verification and validation stages, progressing from abstract models to physical hardware.
+
+\subsection{Model-in-the-Loop (MIL)}\label{sec:mil}
+
+Model-in-the-Loop testing validates the system design within a purely virtual environment. Both the controller and the plant are represented as mathematical models, typically developed in tools such as MATLAB/Simulink. MIL enables early verification of algorithmic correctness, control strategy logic, and functional behavior without requiring any hardware components. Because MIL testing is entirely software-based, it offers the fastest iteration cycles and the lowest cost among all V-model testing phases.
+
+\subsection{Software-in-the-Loop (SIL)}\label{sec:sil}
+
+In SIL testing, the controller model is replaced by the actual generated source code, which runs on the host development computer against the simulated plant model. SIL testing verifies that the auto-generated code behaves identically to the original controller model, identifying discrepancies that may arise from code generation, numerical precision, or implementation-specific behavior.
+
+\subsection{Processor-in-the-Loop (PIL)}\label{sec:pil}
+
+PIL testing executes the controller software on the target microprocessor or ECU hardware, while the plant model still runs in simulation. This phase captures processor-specific effects such as fixed-point arithmetic, limited memory, interrupt handling, and execution timing that are invisible during SIL testing.
+
+\subsection{Hardware-in-the-Loop (HIL)}\label{sec:hil}
+
+HIL testing represents a critical validation stage where the complete ECU hardware, including its physical interfaces, runs against a real-time simulation of the vehicle plant model \parencite{dspace2023hil}. The HIL simulator generates realistic electrical signals that mimic the outputs of real sensors (e.g., accelerometer readings, wheel speed pulses, pedal position voltages) and receives the ECU's actuator commands in return. This closed-loop configuration allows validation of the entire hardware-software stack under conditions that closely approximate real vehicle operation, but in a safe, repeatable laboratory environment.
+
+HIL testing is particularly valuable for fault injection studies because faults can be introduced systematically at precisely defined times, locations, and magnitudes---something that would be impractical or dangerous to do in a real vehicle. The dSPACE HIL platform, used in the research group at TU~Clausthal, provides Configuration Desk for system setup and Control Desk for real-time monitoring and data logging during test execution \parencite{abboush2022intelligent}.
+
+\subsection{Vehicle-in-the-Loop (VIL)}\label{sec:vil}
+
+VIL testing places a physical vehicle---or a high-fidelity driving simulator---within a virtual environment that generates realistic driving scenarios. The vehicle's control systems respond to simulated road conditions, traffic, and weather, while the virtual environment adapts in real time to the vehicle's actions. VIL bridges the gap between laboratory HIL testing and real-world test drives.
+
+\section{The Real Test Drive Validation Process}\label{sec:real_test_drive}
+
+The real test drive constitutes the final validation stage for automotive systems before production release. During these drives, the vehicle operates under actual road conditions while onboard data acquisition systems continuously record sensor measurements at high sampling rates. This section describes the process as it relates to the data used in this thesis.
+
+\subsection{Test Drive Data Acquisition}\label{sec:data_acquisition}
+
+During a real test drive, data acquisition systems record signals from all relevant sensors and ECUs over the vehicle's CAN bus. Typical recorded signals include:
+
+\begin{itemize}
+    \item Accelerator pedal position (\%), reflecting the driver's throttle input
+    \item Vehicle speed (km/h), measured by wheel speed sensors
+    \item Engine speed (RPM), from the crankshaft position sensor
+    \item Steering wheel angle (degrees), from the steering column sensor
+    \item Brake pedal position (\%), indicating braking intensity
+    \item Lateral and longitudinal acceleration (m/s\textsuperscript{2}), from inertial measurement units
+\end{itemize}
+
+Sampling rates vary by sensor type. In the Audi A2D2 dataset used in this thesis, the accelerator pedal signal is recorded at approximately 100~Hz, while the vehicle speed signal is recorded at approximately 50~Hz. These different rates reflect the physical characteristics of each measurement: the accelerator pedal position can change rapidly with the driver's foot movement, while vehicle speed changes more gradually due to the vehicle's inertia.
+
+\subsection{Data Volume and Analysis Challenges}\label{sec:data_challenges}
+
+A single test drive of 30~minutes at 100~Hz sampling generates over 180,000 data points per sensor channel. With multiple sensors recorded simultaneously, the total data volume per test session can reach several gigabytes. Manual expert analysis of this volume is impractical, motivating the development of automated analysis methods.
+
+The key challenge is that faults in real-world data are rare, unlabeled, and diverse. A sensor may produce subtly incorrect readings for only a few seconds within hours of normal operation. Traditional threshold-based monitoring catches only the most severe deviations, while intermittent or slowly drifting faults may go undetected. This motivates the self-supervised approach developed in this thesis, which learns a comprehensive model of normal behavior and can identify even subtle deviations.
+
+\subsection{The A2D2 Dataset}\label{sec:a2d2_background}
+
+The Audi Autonomous Driving Dataset (A2D2) \parencite{a2d2_2020} is a large-scale public dataset recorded by Audi AG for research in autonomous driving. It contains sensor data from multiple test drives conducted in three German cities: Gaimersheim, Ingolstadt, and Munich. The dataset includes camera images, LiDAR point clouds, and CAN bus signals recorded during real-world driving.
+
+For the purpose of this thesis, only the CAN bus signals are used, specifically the accelerator pedal position and vehicle speed. These signals provide a representative pair of automotive sensors with a clear physical relationship: the accelerator pedal is a driver input, and the vehicle speed is the corresponding system output. The data is stored in JSON format with microsecond-resolution timestamps, enabling precise sampling rate analysis and signal alignment.
+
+\section{Fault Injection Approaches}\label{sec:fault_injection}
+
+Fault injection is a validation technique used to assess how a system behaves in the presence of faults \parencite{abboush2022intelligent}. ISO~26262 recommends fault injection at various stages of the V-model to verify that safety mechanisms correctly detect and mitigate faults. A fault injection scenario is characterized by three attributes: \emph{when} the fault occurs (fault time), \emph{where} it occurs (fault location), and \emph{what type} of fault is introduced (fault type).
+
+\subsection{Fault Types}\label{sec:fault_types}
+
+Table~\ref{tab:fault_types} summarizes the three fault types used in this thesis, along with their mathematical representations and typical physical causes.
+
+\begin{table}[H]
+\centering
+\caption{Mathematical representations of signal fault types used in this thesis.}
+\label{tab:fault_types}
+\renewcommand{\arraystretch}{1.4}
+\begin{tabular}{p{2.8cm} p{5.5cm} p{4.5cm}}
+\toprule
+\textbf{Fault Type} & \textbf{Mathematical Representation} & \textbf{Physical Cause} \\
+\midrule
+Healthy signal & $y(t) = x(t)$ & Normal operation \\
+Gain fault & $y(t) = \alpha \cdot x(t), \quad \alpha \neq 1$ & Calibration error, amplifier drift \\
+Noise fault & $y(t) = x(t) + \eta(t), \quad \eta \sim \mathcal{N}(0,\sigma^2)$ & EMI, sensor degradation \\
+Stuck-at fault & $y(t) = c \quad \forall\, t \geq t_f$ & Broken wiring, component failure \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[H]
+\centering
+\fbox{\parbox{0.85\textwidth}{\centering\vspace{4cm}
+\textbf{[PLACEHOLDER -- Figure~\ref{fig:fault_types_visual}]}\\[0.5em]
+Generate a figure showing four subplots: (a)~healthy signal, (b)~gain fault ($\alpha=1.3$), (c)~noise fault ($\sigma=0.5$), (d)~stuck-at fault ($c=2.0$). Use the accelerator pedal signal from any HIL file as the base signal. Similar to Figure~2 in the Ehab thesis.
+\vspace{0.5cm}}}
+\caption{Comparison of a healthy sensor signal with three fault types: gain, noise, and stuck-at.}
+\label{fig:fault_types_visual}
+\end{figure}
+
+\textbf{Gain fault.} The sensor output is scaled by an incorrect factor $\alpha$. When $\alpha > 1$, the signal is amplified; when $\alpha < 1$, it is attenuated. This fault typically arises from calibration errors in the signal conditioning circuit or from amplifier drift due to temperature changes. The distortion is proportional to the signal magnitude, meaning it is most visible during dynamic driving conditions and nearly invisible when the true value is close to zero.
+
+\textbf{Noise fault.} Additive Gaussian noise $\eta(t)$ corrupts the sensor output. The noise standard deviation $\sigma$ determines the fault severity. Noise faults are caused by electromagnetic interference (EMI) from nearby components, degraded shielding, or loose electrical connections. Unlike gain faults, noise faults are visible regardless of the signal magnitude, appearing as high-frequency fluctuations superimposed on the true signal.
+
+\textbf{Stuck-at fault.} The sensor output freezes at a constant value $c$ from the fault onset time $t_f$ onward. This represents the most severe fault type, corresponding to a complete sensor failure such as a broken wire, shorted circuit, or failed sensing element. The frozen value may be zero, the last valid reading, or an arbitrary voltage determined by the failure mode.
+
+\subsection{Fault Locations}\label{sec:fault_locations}
+
+In this thesis, faults are injected into two sensor signals:
+
+\begin{enumerate}
+    \item \textbf{Accelerator pedal position (\%):} Measures the driver's throttle demand. Range: 0\% (released) to 100\% (fully pressed). A fault in this sensor can cause unintended acceleration or loss of throttle response.
+    \item \textbf{Vehicle speed (km/h):} Measures how fast the vehicle is traveling. A fault in this sensor can affect cruise control, ABS, and stability control systems.
+\end{enumerate}
+
+The combination of three fault types and two fault locations yields six distinct fault scenarios, each evaluated independently in Chapter~\ref{ch:results}.
+
+\section{Deep Learning for Time-Series Data}\label{sec:dl_timeseries}
+
+This section introduces the deep learning architectures relevant to the encoder network used in this thesis.
+
+\subsection{Convolutional Neural Networks (CNNs)}\label{sec:cnn_background}
+
+A CNN applies learnable convolutional filters to extract local patterns from input data \parencite{lecun2015deep}. For one-dimensional time-series data, a 1D convolutional layer computes:
+
+\begin{equation}\label{eq:conv1d}
+    z_j^{(l)}[n] = \sigma\!\left(\sum_{i=1}^{C_{l-1}} \sum_{m=0}^{K-1} w_{ij}^{(l)}[m] \cdot a_i^{(l-1)}[n \cdot s + m] + b_j^{(l)}\right)
+\end{equation}
+
+where $a_i^{(l-1)}[n]$ is the $i$-th input channel at position $n$, $w_{ij}^{(l)}[m]$ are the filter weights of length $K$, $s$ is the stride, $b_j^{(l)}$ is the bias term, $\sigma(\cdot)$ is a nonlinear activation function, and $z_j^{(l)}[n]$ is the $j$-th output feature map at position $n$. The number of input channels is $C_{l-1}$ and the number of output channels (filters) is $C_l$.
+
+\subsection{Batch Normalization}\label{sec:batchnorm}
+
+Batch normalization \parencite{ioffe2015batch} normalizes the pre-activation values within each mini-batch to stabilize and accelerate training:
+
+\begin{equation}\label{eq:batchnorm}
+    \hat{z}_j = \frac{z_j - \mu_{\mathcal{B}}}{\sqrt{\sigma_{\mathcal{B}}^2 + \epsilon}} \cdot \gamma + \beta
+\end{equation}
+
+where $\mu_{\mathcal{B}}$ and $\sigma_{\mathcal{B}}^2$ are the mean and variance computed over the current mini-batch, $\gamma$ and $\beta$ are learnable scale and shift parameters, and $\epsilon$ is a small constant for numerical stability.
+
+\subsection{Pooling Operations}\label{sec:pooling}
+
+Max pooling selects the maximum value within each pooling window of size $p$:
+
+\begin{equation}\label{eq:maxpool}
+    a_j^{\text{pool}}[n] = \max_{m=0}^{p-1}\, z_j[n \cdot p + m]
+\end{equation}
+
+Global average pooling computes the mean across the entire temporal dimension:
+
+\begin{equation}\label{eq:gap}
+    \bar{a}_j = \frac{1}{T} \sum_{n=1}^{T} z_j[n]
+\end{equation}
+
+producing a single scalar per feature map. This operation converts variable-length feature maps into a fixed-size representation, which is essential for mapping time-series windows of arbitrary length to fixed-dimensional embeddings.
+
+\section{Self-Supervised Learning}\label{sec:ssl_background}
+
+Self-supervised learning (SSL) is a paradigm in which a model learns useful representations from unlabeled data by solving pretext tasks that are derived from the data's own structure \parencite{jaiswal2021survey}. The supervisory signal comes not from human annotations but from the inherent properties of the data---temporal order, spatial coherence, or augmentation invariance.
+
+SSL methods can be categorized into three families:
+
+\begin{enumerate}
+    \item \textbf{Generative methods} learn to reconstruct the input data (e.g., autoencoders, variational autoencoders). The reconstruction objective encourages the model to capture the most informative features of the data.
+    \item \textbf{Predictive methods} learn to predict a missing or future part of the input from the available context (e.g., masked language models, Contrastive Predictive Coding \parencite{oord2018representation}).
+    \item \textbf{Contrastive methods} learn to distinguish between similar and dissimilar data pairs in a learned embedding space \parencite{chen2020simple, he2020momentum}. This thesis employs contrastive learning.
+\end{enumerate}
+
+The advantage of SSL for fault detection is that it requires only healthy data for training. Since healthy sensor recordings are abundantly available from routine test drives and HIL experiments, SSL eliminates the need for expensive labeled fault datasets.
+
+\section{Contrastive Learning}\label{sec:contrastive_learning}
+
+Contrastive learning trains an encoder to produce representations in which similar samples are close together and dissimilar samples are far apart. This section provides the mathematical formulation in detail, as the contrastive objective is the central training mechanism of the proposed framework.
+
+\subsection{Problem Formulation}\label{sec:cl_formulation}
+
+Given an unlabeled dataset $\mathcal{D} = \{x_1, x_2, \ldots, x_N\}$ of $N$ sensor data windows, the goal is to learn an encoder function $f_\theta : \mathcal{X} \rightarrow \mathbb{R}^d$ parameterized by $\theta$ that maps each input $x_i \in \mathcal{X}$ to a $d$-dimensional representation $h_i = f_\theta(x_i)$ such that the representation captures the essential structure of the data.
+
+To achieve this without labels, contrastive learning constructs \emph{positive pairs} (two views of the same sample that should have similar representations) and \emph{negative pairs} (views of different samples that should have dissimilar representations).
+
+\subsection{Data Augmentation}\label{sec:augmentation_theory}
+
+A stochastic augmentation module $\mathcal{T}$ transforms each sample $x_i$ into two correlated views:
+
+\begin{align}
+    \tilde{x}_i &= t(x_i), \quad t \sim \mathcal{T} \label{eq:aug1}\\
+    \tilde{x}_j &= t'(x_i), \quad t' \sim \mathcal{T} \label{eq:aug2}
+\end{align}
+
+where $t$ and $t'$ are independently sampled augmentation functions from the family $\mathcal{T}$. The pair $(\tilde{x}_i, \tilde{x}_j)$ forms a \emph{positive pair}: two different views of the same underlying data that the encoder should map to similar representations.
+
+For time-series data, appropriate augmentations must preserve the semantic content of the signal while introducing sufficient variability. Three augmentation strategies are employed in this thesis (detailed in Section~\ref{sec:augmentation_impl}): Gaussian jittering, amplitude scaling, and temporal masking.
+
+\subsection{Encoder and Projection Head}\label{sec:encoder_projection}
+
+The contrastive framework consists of two components:
+
+\begin{enumerate}
+    \item An encoder $f_\theta(\cdot)$ that extracts a representation vector from each augmented view:
+    \begin{equation}\label{eq:encoder_def}
+        h_i = f_\theta(\tilde{x}_i) \in \mathbb{R}^d
+    \end{equation}
+
+    \item A projection head $g_\phi(\cdot)$ that maps the representation to a lower-dimensional space where the contrastive loss is applied:
+    \begin{equation}\label{eq:projhead}
+        z_i = g_\phi(h_i) = W^{(2)} \cdot \sigma\!\left(W^{(1)} h_i + b^{(1)}\right) + b^{(2)}
+    \end{equation}
+    where $W^{(1)} \in \mathbb{R}^{d \times d}$, $W^{(2)} \in \mathbb{R}^{p \times d}$ are weight matrices, $b^{(1)}, b^{(2)}$ are bias vectors, $\sigma(\cdot)$ is the ReLU activation, and $p$ is the projection dimension.
+\end{enumerate}
+
+A critical finding of \textcite{chen2020simple} is that the contrastive loss should be applied to the projected representations $z_i$ rather than the encoder representations $h_i$, because the projection head can discard information (such as augmentation-specific details) that is useful for the contrastive task but irrelevant for downstream tasks. After training, the projection head is discarded, and only the encoder representations $h_i$ are used.
+
+\subsection{Cosine Similarity}\label{sec:cosine_sim}
+
+The similarity between two projected representations is measured using cosine similarity:
+
+\begin{equation}\label{eq:cossim}
+    \mathrm{sim}(z_i, z_j) = \frac{z_i^\top z_j}{\|z_i\|_2 \cdot \|z_j\|_2}
+\end{equation}
+
+Cosine similarity measures the angular alignment between two vectors, independent of their magnitudes. It ranges from $-1$ (opposite directions) through $0$ (orthogonal) to $+1$ (identical direction). This metric is preferred over Euclidean distance in contrastive learning because it is invariant to the scale of the representations, which simplifies optimization.
+
+\subsection{NT-Xent Loss}\label{sec:ntxent}
+
+The Normalized Temperature-scaled Cross-Entropy (NT-Xent) loss, introduced by \textcite{chen2020simple}, is the training objective of SimCLR. For a mini-batch of $N$ samples, $2N$ augmented views are generated. For a positive pair $(i, j)$ derived from the same original sample, the loss is:
+
+\begin{equation}\label{eq:ntxent}
+    \ell_{i,j} = -\log \frac{\exp\!\big(\mathrm{sim}(z_i, z_j)\,/\,\tau\big)}{\displaystyle\sum_{k=1}^{2N} \mathbbm{1}_{[k \neq i]}\, \exp\!\big(\mathrm{sim}(z_i, z_k)\,/\,\tau\big)}
+\end{equation}
+
+where $\tau > 0$ is a temperature parameter and $\mathbbm{1}_{[k \neq i]}$ is an indicator function equal to 1 when $k \neq i$. The numerator contains the similarity of the positive pair, while the denominator sums over all $2N - 1$ other views in the mini-batch, which serve as negative examples.
+
+The total loss over the mini-batch is the average over all positive pairs:
+
+\begin{equation}\label{eq:total_loss}
+    \mathcal{L} = \frac{1}{2N} \sum_{k=1}^{N} \Big[\ell_{2k-1,\,2k} + \ell_{2k,\,2k-1}\Big]
+\end{equation}
+
+Each original sample contributes two loss terms (one for each view serving as the anchor), ensuring symmetry.
+
+\subsection{Role of the Temperature Parameter}\label{sec:temperature}
+
+The temperature $\tau$ in Equation~\ref{eq:ntxent} controls the sharpness of the similarity distribution in the softmax:
+
+\begin{itemize}
+    \item A \textbf{low temperature} (e.g., $\tau = 0.1$) produces a peaked distribution that concentrates the gradient on the hardest negative examples. This encourages fine-grained discrimination but can lead to training instability.
+    \item A \textbf{high temperature} (e.g., $\tau = 1.0$) produces a flatter distribution that treats all negatives more equally, yielding smoother gradients but potentially weaker discrimination.
+    \item The value $\tau = 0.5$ used in this thesis represents a balance between hard negative mining and stable optimization, following the recommendations of \textcite{chen2020simple}.
+\end{itemize}
+
+\subsection{Relationship Between Batch Size and Negative Examples}\label{sec:batchsize}
+
+For a mini-batch of size $N$, each positive pair is contrasted against $2N - 2$ negative pairs. Larger batch sizes therefore provide more diverse negative examples, which has been shown to improve the quality of learned representations \parencite{chen2020simple}. With the batch size $N = 128$ used in this thesis, each sample is compared against 254 negatives per training step.
+
+\subsection{Connection to Noise-Contrastive Estimation}\label{sec:nce}
+
+The NT-Xent loss can be understood as a form of noise-contrastive estimation (NCE) \parencite{gutmann2010noise}. NCE trains a model to distinguish between data samples (positives) and noise samples (negatives) drawn from a known distribution. In the contrastive learning setting, the ``noise'' samples are simply the other augmented views in the mini-batch. The temperature-scaled softmax in Equation~\ref{eq:ntxent} corresponds to a multi-class classification problem where the model must identify the correct positive among all candidates.
+
+\section{Anomaly Detection}\label{sec:anomaly_detection_bg}
+
+After contrastive pretraining, the encoder produces embeddings that capture the manifold of normal sensor behavior. Anomaly detection identifies test samples whose embeddings deviate significantly from this normal manifold.
+
+\subsection{Distance-Based Anomaly Detection}\label{sec:distance_anomaly}
+
+The simplest approach computes the distance (or negative similarity) between a test embedding and a reference point representing the normal distribution. In this thesis, the reference is the centroid of the healthy calibration embeddings:
+
+\begin{equation}\label{eq:centroid}
+    \mu_h = \frac{1}{|\mathcal{H}|} \sum_{h_i \in \mathcal{H}} h_i
+\end{equation}
+
+where $\mathcal{H}$ is the set of embeddings computed from healthy calibration windows. The anomaly score for a new window with embedding $h_\text{new}$ is:
+
+\begin{equation}\label{eq:anomaly_score}
+    s = \mathrm{sim}(h_\text{new},\, \mu_h) = \frac{h_\text{new}^\top \mu_h}{\|h_\text{new}\|_2 \cdot \|\mu_h\|_2}
+\end{equation}
+
+A low similarity score indicates that the test window is far from the healthy centroid in the embedding space and is therefore more likely to contain a fault.
+
+\subsection{Threshold-Based Detection}\label{sec:threshold}
+
+The detection decision is made by comparing the anomaly score against a threshold $\theta$:
+
+\begin{equation}\label{eq:decision}
+    \text{decision}(h_\text{new}) = \begin{cases}
+        \textsc{Faulty} & \text{if } s < \theta \\
+        \textsc{Healthy} & \text{if } s \geq \theta
+    \end{cases}
+\end{equation}
+
+The threshold is set based on a percentile of the healthy similarity distribution. Given the sorted healthy similarities $\{s_1 \leq s_2 \leq \cdots \leq s_{|\mathcal{H}|}\}$, the $p$-th percentile threshold is:
+
+\begin{equation}\label{eq:percentile}
+    \theta_p = s_{\lfloor p/100 \cdot |\mathcal{H}| \rfloor}
+\end{equation}
+
+Lower percentiles yield more permissive thresholds (only the most extreme deviations are flagged), while higher percentiles yield stricter thresholds (more faults are caught at the cost of more false alarms). This thesis evaluates six percentiles: 15, 20, 25, 30, 35, and~40.
+
+\section{Evaluation Metrics}\label{sec:metrics_bg}
+
+The following metrics are used throughout this thesis for evaluating fault detection performance. All metrics are defined in terms of the confusion matrix entries: true positives (TP), true negatives (TN), false positives (FP), and false negatives (FN).
+
+\begin{table}[H]
+\centering
+\caption{Confusion matrix for binary fault detection.}
+\label{tab:confusion_matrix}
+\renewcommand{\arraystretch}{1.3}
+\begin{tabular}{l|cc}
+\toprule
+ & \textbf{Predicted Healthy} & \textbf{Predicted Faulty} \\
+\midrule
+\textbf{Actually Healthy} & TN & FP \\
+\textbf{Actually Faulty}  & FN & TP \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{Precision} measures the fraction of detected anomalies that are true faults:
+\begin{equation}\label{eq:precision}
+    \text{Precision} = \frac{\text{TP}}{\text{TP} + \text{FP}}
+\end{equation}
+
+\textbf{Recall} (sensitivity) measures the fraction of actual faults that are correctly detected:
+\begin{equation}\label{eq:recall}
+    \text{Recall} = \frac{\text{TP}}{\text{TP} + \text{FN}}
+\end{equation}
+
+In safety-critical automotive applications, recall is typically prioritized because missing a real fault (FN) poses a greater risk than a false alarm (FP).
+
+\textbf{F1-score} is the harmonic mean of precision and recall:
+\begin{equation}\label{eq:f1}
+    F_1 = 2 \cdot \frac{\text{Precision} \cdot \text{Recall}}{\text{Precision} + \text{Recall}}
+\end{equation}
+
+\textbf{Accuracy} is the fraction of all predictions that are correct:
+\begin{equation}\label{eq:accuracy}
+    \text{Accuracy} = \frac{\text{TP} + \text{TN}}{\text{TP} + \text{TN} + \text{FP} + \text{FN}}
+\end{equation}
+
+\textbf{ROC curve and AUC.} The Receiver Operating Characteristic (ROC) curve plots the true positive rate (recall) against the false positive rate ($\text{FPR} = \text{FP}/(\text{FP}+\text{TN})$) across all possible threshold values. The Area Under the ROC Curve (AUC) provides a single scalar measure of discrimination ability: AUC~$=0.5$ indicates random performance, AUC~$=1.0$ indicates perfect separation.
+
+\section{Summary}\label{sec:bg_summary}
+
+This chapter has established the theoretical foundations for the proposed framework. The automotive V-model and HIL testing provide the application context and the source of both training and test data. The mathematical formulations of contrastive learning---including data augmentation, the NT-Xent loss, and the role of the temperature parameter---define the self-supervised training objective. Cosine similarity-based anomaly detection with percentile thresholding provides the fault detection mechanism. The evaluation metrics (precision, recall, F1, accuracy, confusion matrix, ROC/AUC) enable a rigorous assessment of detection performance. These components are combined in the methodology presented in Chapter~\ref{ch:methodology}.

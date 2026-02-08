@@ -1,0 +1,397 @@
+\chapter{Methodology, Implementation, and Results}\label{ch:methodology}
+
+This chapter presents the complete methodology, implementation details, and intermediate results of the proposed self-supervised fault detection framework. Each subsection is described with sufficient detail for reproducibility by other researchers. The chapter begins with the overall system architecture and then proceeds through each component in the order of the processing pipeline.
+
+\section{System Architecture}\label{sec:architecture}
+
+Figure~\ref{fig:architecture} illustrates the three-phase architecture of the proposed framework.
+
+\begin{figure}[H]
+\centering
+\fbox{\parbox{0.92\textwidth}{\centering\vspace{5cm}
+\textbf{[PLACEHOLDER -- Figure~\ref{fig:architecture}]}\\[0.5em]
+Generate a high-level architecture diagram showing the three phases:\\
+\textbf{Phase~1:} A2D2 Healthy Data $\rightarrow$ Preprocessing $\rightarrow$ Normalization $\rightarrow$ Windowing $\rightarrow$ Augmentation $\rightarrow$ SimCLR 1D-CNN Encoder Training\\
+\textbf{Phase~2:} HIL Healthy Data (90\,s) $\rightarrow$ Frozen Encoder $\rightarrow$ Healthy Centroid + Threshold Calibration\\
+\textbf{Phase~3:} HIL Fault Data $\rightarrow$ Frozen Encoder $\rightarrow$ Cosine Similarity $\rightarrow$ Threshold Comparison $\rightarrow$ Healthy/Faulty Decision\\
+Use a flowchart style similar to Figure~9 in the Ehab thesis.
+\vspace{0.5cm}}}
+\caption{Three-phase architecture of the proposed SSL-based fault detection framework.}
+\label{fig:architecture}
+\end{figure}
+
+The framework consists of three phases, each with clearly defined inputs, processing steps, and outputs:
+
+\begin{enumerate}
+    \item \textbf{Phase~1: Self-Supervised Pretraining} (Sections~\ref{sec:a2d2_loading}--\ref{sec:simclr_impl}). The 1D-CNN encoder is trained using the SimCLR contrastive learning objective on healthy sensor data from the A2D2 dataset. This phase runs once and produces a trained encoder that captures the normal behavior of automotive sensors.
+
+    \item \textbf{Phase~2: Anomaly Detection Calibration} (Section~\ref{sec:calibration_impl}). A small amount of healthy HIL data is passed through the frozen encoder to establish a reference distribution. The healthy centroid and similarity-based detection thresholds are computed.
+
+    \item \textbf{Phase~3: Fault Detection and Evaluation} (Section~\ref{sec:detection_impl}). HIL data containing injected faults is evaluated against the calibrated thresholds. Comprehensive metrics are computed for each fault type and threshold setting.
+\end{enumerate}
+
+\section{Data Collection and Sources}\label{sec:data_sources}
+
+Two data sources are used in this thesis, reflecting the cross-domain transfer scenario from real-world driving to HIL simulation.
+
+\subsection{A2D2 Dataset (Training Data)}\label{sec:a2d2_loading}
+
+The Audi Autonomous Driving Dataset \parencite{a2d2_2020} provides the training data. The raw data is stored in JSON files named \texttt{bus\_signals.json}, each containing timestamped sensor recordings from a real test drive. The loading procedure is as follows:
+
+\begin{enumerate}
+    \item \textbf{File discovery:} Search the data directory recursively for \texttt{bus\_signals.json} files larger than 1~MB (to exclude incomplete header-only files).
+    \item \textbf{JSON parsing:} For each file, extract the \texttt{accelerator\_pedal} and \texttt{vehicle\_speed} entries, each containing a list of $[\text{timestamp}_{\mu s},\, \text{value}]$ pairs.
+    \item \textbf{Sampling rate verification:} Compute the actual sampling rate from consecutive timestamp differences. The accelerator pedal is recorded at approximately 100~Hz and the vehicle speed at approximately 50~Hz.
+    \item \textbf{Speed upsampling:} The vehicle speed signal is upsampled from 50~Hz to 100~Hz using linear interpolation (\texttt{scipy.interpolate.interp1d}) to align with the accelerator timestamps. Linear interpolation is appropriate because vehicle speed changes slowly due to the vehicle's inertia, and the interpolation interval (0.02~s) is short relative to the speed dynamics.
+    \item \textbf{Dataset concatenation:} Data from up to three JSON files is concatenated into a single DataFrame containing approximately 219,064~samples (36.5~minutes at 100~Hz).
+\end{enumerate}
+
+Table~\ref{tab:a2d2_stats} reports the statistical properties of the combined A2D2 data before normalization.
+
+\begin{table}[H]
+\centering
+\caption{Statistical properties of the A2D2 training data before normalization.}
+\label{tab:a2d2_stats}
+\renewcommand{\arraystretch}{1.3}
+\begin{tabular}{lcccccc}
+\toprule
+\textbf{Sensor} & \textbf{Unit} & \textbf{Samples} & \textbf{Rate (Hz)} & \textbf{Mean} & \textbf{Std} & \textbf{Range} \\
+\midrule
+Accelerator & \% & $\sim$219k & 100 & \textit{(from run)} & \textit{(from run)} & 0--100 \\
+Speed & km/h & $\sim$219k & 50$\rightarrow$100 & \textit{(from run)} & \textit{(from run)} & 0--$\sim$80 \\
+\bottomrule
+\end{tabular}\\[0.3em]
+\small\textit{Note: Exact values depend on which A2D2 files are loaded. The pipeline prints and logs all statistics.}
+\end{table}
+
+\begin{figure}[H]
+\centering
+\fbox{\parbox{0.92\textwidth}{\centering\vspace{5cm}
+\textbf{[PLACEHOLDER -- Figure~\ref{fig:a2d2_signals}]}\\[0.5em]
+Use the plot generated by the notebook: \texttt{part1\_a2d2\_comprehensive.png}\\
+This shows: (a) time-series of accelerator and speed for the first 30\,s, (b) distribution histograms, (c) box plots, (d) correlation scatter plot, (e) metadata table.
+\vspace{0.5cm}}}
+\caption{A2D2 data analysis: time-series signals, distribution histograms, box plots, and sensor correlation for the combined training dataset.}
+\label{fig:a2d2_signals}
+\end{figure}
+
+\subsection{HIL Dataset (Calibration and Test Data)}\label{sec:hil_data}
+
+The HIL data originates from a dSPACE Hardware-in-the-Loop test bench at TU~Clausthal \parencite{abboush2022intelligent}. It comprises one healthy recording and six fault-injected recordings, each stored as a CSV file exported from the HIL data logger.
+
+\textbf{HIL data parsing.} The CSV files follow a specific format originating from the dSPACE measurement data format (MDF). The parsing procedure identifies the header row (beginning with ``path,''), locates the sensor columns by keyword matching (``AccPedal'' or ``accelerator'' for the pedal position; ``v\_Vehicle'' or ``speed'' for the vehicle speed), and extracts the numerical data rows (beginning with ``trace\_values,''). Missing values are handled by linear interpolation.
+
+Table~\ref{tab:hil_files} lists all HIL data files used in this thesis.
+
+\begin{table}[H]
+\centering
+\caption{Overview of HIL data files used for calibration and testing.}
+\label{tab:hil_files}
+\renewcommand{\arraystretch}{1.3}
+\begin{tabular}{llllc}
+\toprule
+\textbf{File} & \textbf{Usage} & \textbf{Faulty Sensor} & \textbf{Fault Type} & \textbf{$\sim$Samples} \\
+\midrule
+healthy.csv & Calibration & -- & -- & 9,000 \\
+acc fault gain.csv & Test & Accelerator & Gain & 31,500 \\
+acc fault noise.csv & Test & Accelerator & Noise & 32,200 \\
+acc fault stuck.csv & Test & Accelerator & Stuck-at & 31,700 \\
+rpm fault gain.csv & Test & Speed & Gain & 32,300 \\
+rpm fault noise.csv & Test & Speed & Noise & 31,700 \\
+rpm fault stuck at.csv & Test & Speed & Stuck-at & 32,700 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Dataset Fusion: A2D2 with HIL}\label{sec:dataset_fusion}
+
+A central aspect of this work is the fusion of two data sources with different origins, formats, and characteristics. Table~\ref{tab:fusion_comparison} summarizes the differences.
+
+\begin{table}[H]
+\centering
+\caption{Comparison of the A2D2 and HIL datasets.}
+\label{tab:fusion_comparison}
+\renewcommand{\arraystretch}{1.3}
+\begin{tabular}{lll}
+\toprule
+\textbf{Property} & \textbf{A2D2} & \textbf{HIL} \\
+\midrule
+Source & Real vehicle (Audi, Germany) & dSPACE HIL simulator \\
+Format & JSON with $\mu$s timestamps & CSV (MDF export) \\
+Content & Healthy driving only & Healthy + 6 fault scenarios \\
+Common sensors & accelerator\_pedal, vehicle\_speed & AccPedal, v\_Vehicle \\
+Acc.\ sampling rate & $\sim$100~Hz & 100~Hz \\
+Speed sampling rate & $\sim$50~Hz (upsampled to 100~Hz) & 100~Hz \\
+Purpose & SimCLR training (Phase~1) & Calibration \& testing (Phases~2--3) \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The fusion process ensures that the encoder, trained on A2D2 data, can be applied to HIL data without retraining:
+
+\begin{enumerate}
+    \item \textbf{Sensor alignment:} The common sensors (accelerator, speed) are identified in both datasets and extracted using the respective parsing procedures.
+    \item \textbf{Sampling rate alignment:} Both datasets are brought to a uniform 100~Hz rate (A2D2 speed is upsampled; HIL is already at 100~Hz).
+    \item \textbf{Normalization alignment:} The Z-score normalization scaler is fitted on the A2D2 training data and then applied to both A2D2 and HIL data (see Section~\ref{sec:normalization_impl}).
+    \item \textbf{Windowing alignment:} Identical window size (200~samples) and stride (100~samples) are used for both datasets.
+\end{enumerate}
+
+\begin{figure}[H]
+\centering
+\fbox{\parbox{0.92\textwidth}{\centering\vspace{6cm}
+\textbf{[PLACEHOLDER -- Figure~\ref{fig:fusion_plot}]}\\[0.5em]
+Generate a figure with two rows:\\
+\textbf{Top row:} Speed signal from A2D2 (healthy) for the first 60\,s.\\
+\textbf{Bottom row:} Speed signal from ``rpm fault gain.csv'' (HIL), with the fault range highlighted using a red shaded region. Annotate the fault start and end times.\\
+Both plots should share the same x-axis scale and y-axis label. Use the title: ``Dataset Fusion: A2D2 Healthy Training Data vs.\ HIL Fault Test Data (Speed Sensor).''\\
+This directly addresses the supervisor's request to ``show the data set fusion (A2D2 with HIL) and highlight the fault range in the plot, e.g., present the rpm signal.''
+\vspace{0.5cm}}}
+\caption{Dataset fusion visualization: A2D2 healthy speed signal (top) and HIL speed signal with gain fault region highlighted in red (bottom).}
+\label{fig:fusion_plot}
+\end{figure}
+
+\section{Data Preprocessing}\label{sec:preprocessing_impl}
+
+\subsection{Z-Score Normalization}\label{sec:normalization_impl}
+
+The combined A2D2 training data is normalized using Z-score standardization:
+
+\begin{equation}\label{eq:zscore_impl}
+    x_{\text{norm}}^{(j)} = \frac{x^{(j)} - \mu_j}{\sigma_j}
+\end{equation}
+
+where $\mu_j$ and $\sigma_j$ are the mean and standard deviation of the $j$-th sensor, computed exclusively from the A2D2 training data. The scaler parameters are saved and reused to normalize the HIL data, ensuring that both domains are mapped to a comparable feature space. This is critical for cross-domain transfer: without consistent normalization, the encoder would produce incompatible embeddings for A2D2 and HIL inputs.
+
+\subsection{Sliding Window Segmentation}\label{sec:windowing_impl}
+
+The normalized time series is divided into overlapping fixed-length windows using a sliding window approach:
+
+\begin{equation}\label{eq:sliding_window}
+    W_k = \big[x[k \cdot S],\; x[k \cdot S + 1],\; \ldots,\; x[k \cdot S + L - 1]\big], \quad k = 0, 1, 2, \ldots
+\end{equation}
+
+where $L = 200$ is the window length and $S = 100$ is the stride. At 100~Hz, each window covers 2~seconds of driving, which is sufficient to capture meaningful driving dynamics (acceleration, braking, gear changes). The 50\% overlap ($S = L/2$) generates approximately twice as many training windows compared to non-overlapping segmentation, increasing the diversity of training examples for SimCLR.
+
+Each window $W_k \in \mathbb{R}^{200 \times 2}$ is a matrix with 200~rows (time steps) and 2~columns (accelerator, speed). For input to the 1D-CNN encoder, the dimensions are transposed to $(2, 200)$, placing the sensor channels in the first dimension and the temporal dimension second, following the PyTorch convention for 1D convolutions.
+
+Algorithm~\ref{alg:windowing} formalizes the windowing procedure.
+
+\begin{algorithm}[H]
+\caption{Sliding Window Segmentation}
+\label{alg:windowing}
+\begin{algorithmic}[1]
+\State \textbf{Input:} Normalized time series $X \in \mathbb{R}^{T \times C}$, window length $L$, stride $S$
+\State \textbf{Output:} Set of windows $\{W_0, W_1, \ldots, W_{K-1}\}$
+\State $K \leftarrow \lfloor (T - L) / S \rfloor + 1$
+\For{$k = 0$ to $K-1$}
+    \State $\text{start} \leftarrow k \cdot S$
+    \State $W_k \leftarrow X[\text{start} : \text{start} + L,\; :]$
+\EndFor
+\State \Return $\{W_0, W_1, \ldots, W_{K-1}\}$
+\end{algorithmic}
+\end{algorithm}
+
+\section{SimCLR Training Implementation}\label{sec:simclr_impl}
+
+\subsection{Data Augmentation Strategies}\label{sec:augmentation_impl}
+
+Three augmentation strategies are applied independently to generate two views of each window during SimCLR training. Each augmentation is applied with a probability of 50\% per view, ensuring diverse augmentation combinations.
+
+\textbf{Gaussian jittering.} Adds random noise to simulate minor sensor fluctuations:
+\begin{equation}\label{eq:jitter_impl}
+    \tilde{x}(t) = x(t) + \epsilon(t), \quad \epsilon(t) \sim \mathcal{N}(0, \sigma_j^2)
+\end{equation}
+with $\sigma_j = 0.1$. This augmentation teaches the encoder to be invariant to small noise-like perturbations that may arise from normal sensor operation.
+
+\textbf{Amplitude scaling.} Multiplies the signal by a random factor:
+\begin{equation}\label{eq:scaling_impl}
+    \tilde{x}(t) = s \cdot x(t), \quad s \sim \text{Uniform}(0.8,\; 1.2)
+\end{equation}
+This augmentation produces invariance to minor amplitude variations, which is important because different sensor instances may have slightly different gains even under normal conditions.
+
+\textbf{Temporal masking.} Sets a contiguous segment to zero:
+\begin{equation}\label{eq:masking_impl}
+    \tilde{x}(t) = \begin{cases} 0 & \text{if } t_0 \leq t < t_0 + m \\ x(t) & \text{otherwise} \end{cases}
+\end{equation}
+where $t_0 \sim \text{Uniform}(0, L - m)$ is a random start position and $m = \lfloor 0.1 \cdot L \rfloor = 20$ samples (10\% of the window). Masking encourages the encoder to form representations based on the overall signal context rather than relying on any single temporal segment.
+
+\begin{figure}[H]
+\centering
+\fbox{\parbox{0.92\textwidth}{\centering\vspace{5cm}
+\textbf{[PLACEHOLDER -- Figure~\ref{fig:augmentation_examples}]}\\[0.5em]
+Use the plot generated by the notebook: \texttt{part2\_augmentation\_examples.png}\\
+Shows a single training window and its three augmented versions (jittered, scaled, masked) for both sensor channels.
+\vspace{0.5cm}}}
+\caption{Examples of the three data augmentation strategies applied to a training window. Top: accelerator signal. Bottom: speed signal.}
+\label{fig:augmentation_examples}
+\end{figure}
+
+\subsection{1D-CNN Encoder Architecture}\label{sec:encoder_impl}
+
+The encoder is a three-block 1D Convolutional Neural Network. Each block consists of a Conv1d layer, batch normalization, ReLU activation, and max pooling. Table~\ref{tab:encoder_layers} provides the layer-by-layer architecture summary.
+
+\begin{table}[H]
+\centering
+\caption{Layer-wise summary of the 1D-CNN encoder architecture.}
+\label{tab:encoder_layers}
+\renewcommand{\arraystretch}{1.3}
+\begin{tabular}{llccccc}
+\toprule
+\textbf{Block} & \textbf{Layer} & \textbf{In Ch} & \textbf{Out Ch} & \textbf{Kernel} & \textbf{Stride} & \textbf{Output} \\
+\midrule
+-- & Input & -- & -- & -- & -- & $(B, 2, 200)$ \\
+\midrule
+\multirow{3}{*}{Block~1} & Conv1d & 2 & 64 & 7 & 2 & $(B, 64, 100)$ \\
+ & BatchNorm + ReLU & -- & -- & -- & -- & $(B, 64, 100)$ \\
+ & MaxPool1d & -- & -- & 2 & 2 & $(B, 64, 50)$ \\
+\midrule
+\multirow{3}{*}{Block~2} & Conv1d & 64 & 128 & 5 & 2 & $(B, 128, 25)$ \\
+ & BatchNorm + ReLU & -- & -- & -- & -- & $(B, 128, 25)$ \\
+ & MaxPool1d & -- & -- & 2 & 2 & $(B, 128, 12)$ \\
+\midrule
+\multirow{3}{*}{Block~3} & Conv1d & 128 & 256 & 3 & 1 & $(B, 256, 12)$ \\
+ & BatchNorm + ReLU & -- & -- & -- & -- & $(B, 256, 12)$ \\
+ & MaxPool1d & -- & -- & 2 & 2 & $(B, 256, 6)$ \\
+\midrule
+-- & AdaptiveAvgPool1d & -- & -- & -- & -- & $(B, 256, 1)$ \\
+-- & Squeeze & -- & -- & -- & -- & $(B, 256)$ \\
+\bottomrule
+\end{tabular}\\[0.3em]
+$B$: batch size.
+\end{table}
+
+The encoder takes input tensors of shape $(B, 2, 200)$---batch size $\times$ sensor channels $\times$ time steps---and produces 256-dimensional embedding vectors. The three convolutional blocks progressively increase the feature dimension ($2 \rightarrow 64 \rightarrow 128 \rightarrow 256$) while reducing the temporal dimension through strided convolutions and max pooling. Adaptive global average pooling at the end collapses the remaining temporal dimension into a single value per feature map, producing a fixed-size output regardless of the precise input length.
+
+\subsection{Projection Head}\label{sec:projhead_impl}
+
+The projection head is a two-layer fully connected network:
+
+\begin{equation}
+    g(h) = W^{(2)} \cdot \text{ReLU}\!\big(\text{BN}(W^{(1)} \cdot h + b^{(1)})\big) + b^{(2)}
+\end{equation}
+
+with $W^{(1)} \in \mathbb{R}^{256 \times 256}$ and $W^{(2)} \in \mathbb{R}^{128 \times 256}$, producing 128-dimensional projections. Following \textcite{chen2020simple}, the projection head is used only during SimCLR training and discarded for downstream anomaly detection.
+
+\subsection{Training Configuration}\label{sec:training_config}
+
+Table~\ref{tab:hyperparameters} lists all hyperparameters used during training.
+
+\begin{table}[H]
+\centering
+\caption{Hyperparameters for SimCLR training.}
+\label{tab:hyperparameters}
+\renewcommand{\arraystretch}{1.3}
+\begin{tabular}{lll}
+\toprule
+\textbf{Hyperparameter} & \textbf{Value} & \textbf{Justification} \\
+\midrule
+Window size $L$ & 200 & 2\,s at 100\,Hz; captures driving dynamics \\
+Stride $S$ & 100 & 50\% overlap for data augmentation \\
+Batch size $N$ & 128 & 254 negative pairs per sample \\
+Epochs & 50 & Experimentally determined convergence \\
+Learning rate & $10^{-3}$ & Standard for Adam optimizer \\
+Weight decay & $10^{-4}$ & L2 regularization \\
+Temperature $\tau$ & 0.5 & Balance of discrimination and stability \\
+Embedding dim $d$ & 256 & Encoder output dimension \\
+Projection dim $p$ & 128 & NT-Xent loss space dimension \\
+Jitter $\sigma_j$ & 0.1 & Minor noise invariance \\
+Scale range & $[0.8,\; 1.2]$ & Minor gain invariance \\
+Mask ratio $r$ & 0.1 & 10\% temporal masking \\
+Optimizer & Adam \parencite{kingma2014adam} & Adaptive per-parameter learning rate \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Training Procedure}\label{sec:training_procedure}
+
+Algorithm~\ref{alg:simclr} formalizes the SimCLR training procedure.
+
+\begin{algorithm}[H]
+\caption{SimCLR Training for Automotive Sensor Data}
+\label{alg:simclr}
+\begin{algorithmic}[1]
+\State \textbf{Input:} Training windows $\{W_k\}_{k=1}^{K}$, epochs $E$, batch size $N$, temperature $\tau$
+\State \textbf{Output:} Trained encoder $f_\theta$
+\State Initialize encoder $f_\theta$ and projection head $g_\phi$
+\State Initialize Adam optimizer with lr $= 10^{-3}$, weight decay $= 10^{-4}$
+\For{$\text{epoch} = 1$ to $E$}
+    \For{each mini-batch $\mathcal{B} = \{W_1, \ldots, W_N\}$}
+        \For{each $W_k \in \mathcal{B}$}
+            \State $\tilde{W}_k^{(1)} \leftarrow \text{Augment}(W_k)$ \Comment{View 1}
+            \State $\tilde{W}_k^{(2)} \leftarrow \text{Augment}(W_k)$ \Comment{View 2}
+        \EndFor
+        \State $h_k^{(v)} \leftarrow f_\theta(\tilde{W}_k^{(v)})$ for all $k, v$ \Comment{Encode}
+        \State $z_k^{(v)} \leftarrow g_\phi(h_k^{(v)})$ for all $k, v$ \Comment{Project}
+        \State Compute $\mathcal{L}$ using Eq.~\ref{eq:total_loss} \Comment{NT-Xent loss}
+        \State Update $\theta, \phi$ via backpropagation
+    \EndFor
+    \State Record epoch loss
+\EndFor
+\State Discard $g_\phi$; save $f_\theta$
+\State \Return $f_\theta$
+\end{algorithmic}
+\end{algorithm}
+
+\begin{figure}[H]
+\centering
+\fbox{\parbox{0.92\textwidth}{\centering\vspace{4cm}
+\textbf{[PLACEHOLDER -- Figure~\ref{fig:training_loss}]}\\[0.5em]
+Use the plot generated by the notebook: \texttt{part2\_training\_curves.png}\\
+Shows the training loss curve over all steps and the per-epoch average loss. The loss should decrease rapidly in the first 10 epochs and then converge gradually.
+\vspace{0.5cm}}}
+\caption{SimCLR training loss over 50 epochs. Left: loss at each training step. Right: average loss per epoch.}
+\label{fig:training_loss}
+\end{figure}
+
+\section{Anomaly Detection Calibration}\label{sec:calibration_impl}
+
+After SimCLR training, the encoder $f_\theta$ is frozen (no further weight updates). The calibration phase establishes the healthy reference distribution in the embedding space.
+
+\subsection{Healthy Calibration Data}\label{sec:healthy_cal}
+
+Only the first 90~seconds of the healthy HIL recording (\texttt{healthy.csv}) is used for calibration. At 100~Hz, this yields approximately 9,000~samples, which are segmented into approximately 88~windows (with stride~100). This small calibration set is sufficient to estimate the healthy centroid and similarity distribution, demonstrating the practical feasibility of the approach: only a brief healthy recording from the target system is needed.
+
+\subsection{Embedding Extraction and Centroid Computation}\label{sec:centroid_impl}
+
+Each calibration window is passed through the frozen encoder to obtain a 256-dimensional embedding. The healthy centroid is computed as the mean of all calibration embeddings:
+
+\begin{equation}
+    \mu_h = \frac{1}{|\mathcal{H}|} \sum_{h_i \in \mathcal{H}} h_i
+\end{equation}
+
+The cosine similarity between each healthy embedding and the centroid is computed, yielding the healthy similarity distribution. The detection thresholds are set at the 15th, 20th, 25th, 30th, 35th, and 40th percentiles of this distribution.
+
+\section{Fault Detection and Evaluation}\label{sec:detection_impl}
+
+\subsection{Per-Fault Evaluation}\label{sec:per_fault_eval}
+
+Each of the six fault files is processed independently:
+
+\begin{enumerate}
+    \item The fault data is loaded, normalized using the saved A2D2 scaler, and segmented into windows.
+    \item Each window is passed through the frozen encoder to obtain its embedding.
+    \item The cosine similarity between the embedding and the healthy centroid is computed.
+    \item The similarity is compared against each of the six thresholds.
+    \item For each threshold, the window is classified as ``healthy'' (above threshold) or ``faulty'' (below threshold).
+    \item Precision, recall, F1-score, accuracy, and confusion matrix entries are computed.
+\end{enumerate}
+
+Since the entire fault file is known to contain faulty data, all windows are labeled as ``faulty'' for ground truth purposes. The metrics therefore measure how well the system detects the presence of the injected fault within the data.
+
+\subsection{Binary Classification Evaluation}\label{sec:binary_eval}
+
+In addition to the per-fault analysis, a binary classification evaluation combines the healthy calibration windows and all fault windows into a single test set. Each window is labeled as either ``healthy'' or ``faulty'' (regardless of fault type), and the same threshold-based detection is applied. This evaluation answers the practical question: given a window of sensor data, can the system correctly determine whether it is healthy or faulty?
+
+For the binary evaluation, the confusion matrix is computed as:
+\begin{itemize}
+    \item \textbf{True Positive (TP):} Fault window correctly detected as faulty
+    \item \textbf{True Negative (TN):} Healthy window correctly identified as healthy
+    \item \textbf{False Positive (FP):} Healthy window incorrectly flagged as faulty
+    \item \textbf{False Negative (FN):} Fault window missed (classified as healthy)
+\end{itemize}
+
+ROC curves are generated by varying the detection threshold continuously across the full range of observed similarity values, and the AUC is computed.
+
+\section{Summary}\label{sec:methodology_summary}
+
+This chapter has presented the complete methodology of the proposed framework, from A2D2 data loading through SimCLR training to HIL fault detection. Key implementation decisions---window size, stride, augmentation parameters, encoder architecture, projection head design, threshold selection---have been justified and documented with sufficient detail for reproducibility. The intermediate results (data statistics, training curves, augmentation examples) confirm that each pipeline stage operates as intended. Chapter~\ref{ch:results} presents the full evaluation results.

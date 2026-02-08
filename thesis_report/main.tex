@@ -1,0 +1,268 @@
+\documentclass[
+	a4paper,
+	12pt,
+	parskip=half,
+	]{scrbook}
+
+\usepackage[
+	left=30mm,
+	right=40mm,
+	top=25mm,
+	bottom=30mm
+	]{geometry}
+
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage[english]{babel}
+\usepackage[autostyle]{csquotes}
+\usepackage{lmodern}
+\usepackage{microtype}
+
+\usepackage[style=authoryear-ibid,backend=biber,doi=false,isbn=false]{biblatex}
+\addbibresource{references.bib}
+\DeclareDelimFormat{nameyeardelim}{\addcomma\space}
+
+\usepackage{scrhack}
+\usepackage{graphicx}
+\usepackage{acronym}
+\let\oldacsu\acsu\renewcommand{\acsu}[1]{\oldacsu{#1}\label{acro:#1}}
+
+\usepackage[onehalfspacing]{setspace}
+
+% Colors
+\usepackage{xcolor}
+\definecolor{TUCgreen}{rgb}{0,0.55,0.31}
+\definecolor{TUCgrey1}{rgb}{0.5,0.5,0.5}
+\definecolor{TUCgrey2}{rgb}{0.9,0.9,0.9}
+\definecolor{TUCred}{rgb}{0.55,0.11,0}
+
+% Additional packages
+\usepackage{subcaption}
+\usepackage{nicefrac}
+\usepackage{amsmath}
+\usepackage{amsfonts}
+\usepackage{amssymb}
+\usepackage{bbm}            % for \mathbbm{1} indicator function
+\usepackage{algorithm,algpseudocode}
+\usepackage{float}
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage{longtable}
+\usepackage{array}
+\usepackage{tabularx}
+\usepackage{listings}
+\usepackage{url}
+
+\usepackage{hyperref}
+\def\MakeUppercaseUnsupportedInPdfStrings{\scshape}
+
+% Code listing style
+\lstset{
+  language=Python,
+  basicstyle=\ttfamily\small,
+  keywordstyle=\color{blue},
+  commentstyle=\color{TUCgrey1},
+  stringstyle=\color{TUCred},
+  breaklines=true,
+  frame=single,
+  numbers=left,
+  numberstyle=\tiny\color{TUCgrey1},
+  captionpos=b
+}
+
+% ============================================================
+% Title page data
+% ============================================================
+\title{Master Thesis}
+\subtitle{Intelligent Analysis of Automotive Sensor Faults\\Using Self-Supervised Learning and\\Real-Time Simulation}
+\author{Yahia Amir Yahia Gamal}
+\newcommand*{\studiengang}{MSc Informatik}
+\newcommand*{\matrikelnummer}{XXXXXX}% <-- Fill in your Matrikelnummer
+\newcommand*{\erstgutachter}{apl. Prof. Dr. Christoph Knieke}
+\newcommand*{\zweitgutachter}{Dr. Stefan Wittek}
+\newcommand*{\betreuer}{Dr. Mohammad Abboush}
+\newcommand*{\institut}{Institute of Software and Systems Engineering}
+\newcommand*{\abteilung}{Department of Software Engineering}
+\newcommand*{\fakultaet}{Faculty of Mathematics/Computer Science and Mechanical Engineering}
+\date{2025}
+
+% Title page definition (identical to TU Clausthal template)
+\makeatletter
+\def\maketitle{%
+	\newgeometry{margin=2cm}
+	\pagenumbering{alph}
+	\thispagestyle{empty}
+	\includegraphics[width=130mm]{Logo-TUC-DE-RGB}%
+	\vspace{20mm}%
+	{\raggedright
+		\begin{center}
+			{\huge \textsc \@title}\vspace{-4ex}
+			{\Huge \bfseries \singlespacing \textsf \@subtitle\par}\vspace{2ex}
+			{\Large \@author}\\[4ex]
+			{\large \fakultaet}\\
+			{\large \institut}\\
+			{\large \abteilung}\\
+			\vfill
+			\begin{tabular}{ll}
+				Matriculation Number & \matrikelnummer \\
+				Program              & \studiengang \\[2ex]
+				First Examiner       & \erstgutachter \\
+				Second Examiner      & \zweitgutachter \\
+				Supervisor           & \betreuer \\[2ex]
+				Submission Date      & \@date
+			\end{tabular}
+		\end{center}
+	}
+	\restoregeometry
+    \clearpage
+	\thispagestyle{empty}
+	\if@twoside
+        \null\newpage
+    \fi
+    \pagenumbering{roman}
+}
+\makeatother
+
+% ============================================================
+\begin{document}
+
+    \maketitle
+
+    % ---- Declaration of Authorship ----
+    \addchap{Declaration of Authorship}
+
+    I have read and understood the guidelines of the Clausthal University of Technology.
+    I confirm that I have prepared this master thesis independently by myself. Any
+    information taken from other sources and being reproduced in this thesis is clearly
+    referenced.
+
+    In terms of the general examination regulations, this work has not yet been
+    submitted to any other examination division.
+
+    I hereby agree that my master thesis may be exhibited in the institute's or
+    university library and kept for inspection.
+
+    \vspace{4em}
+    \noindent Clausthal-Zellerfeld, \hfill Yahia Amir Yahia Gamal\\
+    \textit{Location, Date} \hfill \textit{Signature}
+
+    % ---- Abstract ----
+    \addchap{Abstract}
+
+    The evolution of Automotive Software Systems (ASSs) has led to growing complexity in sensor networks, increasing the risk of undetected faults that can compromise vehicle safety. Traditional fault detection methods depend on supervised learning with large labeled datasets, which are expensive to obtain and inherently incomplete---they cannot cover every possible failure mode.
+
+    This thesis proposes a self-supervised contrastive learning framework for automotive sensor fault detection that requires no labeled fault data. A 1D Convolutional Neural Network encoder is trained using the SimCLR framework on healthy driving data from the Audi Autonomous Driving Dataset (A2D2), learning to map time-series sensor windows into a 256-dimensional embedding space. Anomalies are detected by measuring the cosine similarity between test embeddings and a healthy reference centroid computed from a small calibration set of Hardware-in-the-Loop (HIL) data (90~seconds).
+
+    The framework is evaluated on six fault scenarios---gain, noise, and stuck-at faults injected into accelerator pedal and vehicle speed sensors---across six detection threshold percentiles (15th through 40th). Comprehensive metrics including precision, recall, F1-score, accuracy, confusion matrices, and ROC curves are reported for all experiments, alongside computing cost measurements for training and inference.
+
+    Results demonstrate that self-supervised representations learned from real-world driving data transfer effectively to HIL simulation data for fault detection, without any labeled fault examples. The multi-threshold analysis quantifies the precision--recall trade-off, providing practical guidance for threshold selection in safety-critical applications.
+
+    \vspace{1em}
+    \noindent\textbf{Keywords:} Self-Supervised Learning, Contrastive Learning, SimCLR, Automotive Sensor Fault Detection, Hardware-in-the-Loop, Anomaly Detection, 1D-CNN, Transfer Learning
+
+    % ---- Zusammenfassung ----
+    \addchap{Zusammenfassung}
+
+    Die zunehmende Komplexit\"at moderner Fahrzeugsoftwaresysteme erh\"oht das Risiko unerkannter Sensorfehler, die die Fahrzeugsicherheit gef\"ahrden k\"onnen. Herk\"ommliche Fehlererkennungsmethoden basieren auf \"uberwachtem Lernen mit gro\ss{}en gelabelten Datens\"atzen, deren Beschaffung kostenintensiv und inhärent unvollst\"andig ist.
+
+    Diese Arbeit schl\"agt ein selbst\"uberwachtes kontrastives Lernverfahren zur Fehlererkennung bei Fahrzeugsensoren vor, das keine gelabelten Fehlerdaten ben\"otigt. Ein 1D-CNN-Encoder wird mittels des SimCLR-Frameworks ausschlie\ss{}lich auf gesunden Fahrdaten des Audi Autonomous Driving Dataset (A2D2) trainiert. Anomalien werden durch Kosinusähnlichkeit der Einbettungen zu einem gesunden Referenz-Zentroid erkannt, der aus einer kurzen Kalibrierungsaufnahme (90~Sekunden) von Hardware-in-the-Loop-Daten berechnet wird.
+
+    Das Framework wird an sechs Fehlerszenarien evaluiert---Verst\"arkungsfehler, Rauschfehler und Stuck-at-Fehler in Gaspedalstellung und Fahrzeuggeschwindigkeit---\"uber sechs Schwellenwert-Perzentile (15.\ bis 40.). Pr\"azision, Recall, F1-Score, Genauigkeit, Konfusionsmatrizen und ROC-Kurven werden f\"ur alle Experimente berichtet, zusammen mit den Berechnungskosten f\"ur Training und Inferenz.
+
+    % ---- Table of Contents ----
+    \tableofcontents
+    \addcontentsline{toc}{chapter}{Contents}
+
+    % ---- List of Acronyms ----
+    \addchap{List of Acronyms}
+    \begin{acronym}[XXXXX]
+    	\acro{A2D2}{Audi Autonomous Driving Dataset}
+    	\acro{ADAS}{Advanced Driver Assistance Systems}
+    	\acro{AI}{Artificial Intelligence}
+    	\acro{ASIL}{Automotive Safety Integrity Level}
+    	\acro{ASS}{Automotive Software System}
+    	\acro{AUC}{Area Under the Curve}
+    	\acro{BYOL}{Bootstrap Your Own Latent}
+    	\acro{CAN}{Controller Area Network}
+    	\acro{CNN}{Convolutional Neural Network}
+    	\acro{CPC}{Contrastive Predictive Coding}
+    	\acro{DL}{Deep Learning}
+    	\acro{ECU}{Electronic Control Unit}
+    	\acro{EMI}{Electromagnetic Interference}
+    	\acro{FN}{False Negative}
+    	\acro{FP}{False Positive}
+    	\acro{GRU}{Gated Recurrent Unit}
+    	\acro{HIL}{Hardware-in-the-Loop}
+    	\acro{MBD}{Model-Based Development}
+    	\acro{MIL}{Model-in-the-Loop}
+    	\acro{ML}{Machine Learning}
+    	\acro{MoCo}{Momentum Contrast}
+    	\acro{NT-Xent}{Normalized Temperature-scaled Cross-Entropy}
+    	\acro{PIL}{Processor-in-the-Loop}
+    	\acro{ROC}{Receiver Operating Characteristic}
+    	\acro{SIL}{Software-in-the-Loop}
+    	\acro{SSL}{Self-Supervised Learning}
+    	\acro{TN}{True Negative}
+    	\acro{TP}{True Positive}
+    	\acro{VIL}{Vehicle-in-the-Loop}
+    	\acro{XAI}{Explainable Artificial Intelligence}
+    \end{acronym}
+
+    % ---- List of Figures ----
+    \listoffigures
+    \addcontentsline{toc}{chapter}{List of Figures}
+
+    % ---- List of Tables ----
+    \listoftables
+    \addcontentsline{toc}{chapter}{List of Tables}
+
+    % ============================================================
+    % MAIN CHAPTERS
+    % ============================================================
+    \include{chapters/ch1_introduction}
+    \include{chapters/ch2_background}
+    \include{chapters/ch3_related_work}
+    \include{chapters/ch4_methodology}
+    \include{chapters/ch5_results}
+    \include{chapters/ch6_conclusion}
+
+    % ============================================================
+    % BIBLIOGRAPHY
+    % ============================================================
+    \printbibliography
+    \addcontentsline{toc}{chapter}{Bibliography}
+    \clearpage
+
+    % ============================================================
+    % APPENDIX
+    % ============================================================
+    \appendix
+
+    \chapter{Generated Visualizations}\label{app:visualizations}
+
+    The following figures are generated automatically by the V13 notebook and should be included in the final document:
+
+    \begin{enumerate}
+        \item \texttt{part0\_sensor\_compatibility.png} -- Sensor compatibility analysis
+        \item \texttt{part1\_a2d2\_comprehensive.png} -- A2D2 data analysis
+        \item \texttt{part2\_augmentation\_examples.png} -- Augmentation examples
+        \item \texttt{part2\_training\_curves.png} -- Training loss curves
+        \item \texttt{part3\_confusion\_matrices.png} -- Confusion matrices (all thresholds)
+        \item \texttt{part3\_roc\_curves.png} -- ROC curves
+        \item \texttt{part3\_metrics\_vs\_threshold.png} -- Metrics vs.\ threshold plot
+        \item \texttt{part3\_recall\_heatmap.png} -- Per-fault recall heatmap
+        \item \texttt{part3\_similarity\_distributions.png} -- Similarity distributions
+    \end{enumerate}
+
+    \chapter{Declaration of Authorship}
+
+    I hereby confirm that I have prepared this master thesis independently. Any
+    information taken from other sources is clearly referenced. This work has not been
+    submitted to any other examination division.
+
+    I agree that my thesis may be exhibited in the institute's or university library.
+
+    \vspace{5em}
+    \noindent Clausthal-Zellerfeld, \today \hfill Yahia Amir Yahia Gamal
+
+\end{document}

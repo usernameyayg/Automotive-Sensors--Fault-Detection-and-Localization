@@ -1,0 +1,51 @@
+\chapter{Conclusion and Future Work}\label{ch:conclusion}
+
+\section{Conclusion}\label{sec:conclusion}
+
+This thesis investigated whether contrastive self-supervised learning, trained exclusively on healthy driving data, can detect sensor faults in automotive systems evaluated through Hardware-in-the-Loop testing. The proposed framework combines SimCLR-based contrastive pretraining on A2D2 real-world data with cosine similarity-based anomaly detection on HIL fault-injected data. The following conclusions address the research questions posed in Chapter~\ref{ch:introduction}.
+
+\textbf{RQ1: Can a contrastive SSL model detect sensor faults without labeled fault examples?}
+
+The results confirm that the SimCLR-trained 1D-CNN encoder learns representations of normal sensor behavior that are sufficient for fault detection. By training only on healthy accelerator pedal and vehicle speed data from the A2D2 dataset, the encoder captures the temporal dynamics and cross-sensor correlations that characterize normal driving. Faulty signals produce embeddings that deviate from the healthy centroid in the learned embedding space, enabling detection through cosine similarity scoring. No labeled fault data was used during any phase of training or calibration.
+
+\textbf{RQ2: How does threshold selection affect the sensitivity--specificity trade-off?}
+
+The multi-threshold analysis across six percentiles (15th through 40th) provides a systematic characterization of the precision--recall trade-off. Lower percentile thresholds yield high precision (few false alarms) at the cost of lower recall (some faults are missed), while higher percentile thresholds maximize recall at the cost of reduced precision. The F1-score identifies the optimal balanced operating point. This analysis provides practical deployment guidance: high-ASIL applications should favor higher percentiles to maximize recall, while low-ASIL applications should favor lower percentiles to minimize false alarms.
+
+\textbf{RQ3: Which fault types are most and least detectable?}
+
+Stuck-at faults are consistently the most detectable across all thresholds because a frozen signal fundamentally violates the learned temporal dynamics. Noise faults are moderately detectable, as the injected noise alters the signal's frequency characteristics. Gain faults are the least detectable when the gain factor is close to unity, because the signal shape remains correct and only the amplitude is scaled. This magnitude-dependent detectability reflects the physical reality of sensor fault severity and is consistent with the expectations of domain experts.
+
+\subsection{Key Contributions}\label{sec:contributions}
+
+The thesis makes the following contributions:
+
+\begin{enumerate}
+    \item A self-supervised contrastive learning framework for automotive sensor fault detection that requires zero labeled fault data, addressing the primary limitation of existing supervised methods.
+
+    \item Demonstration of cross-domain transfer from real-world A2D2 driving data to HIL simulation data, validating the practical deployment scenario where a model trained on production vehicles is applied to laboratory test benches.
+
+    \item A systematic multi-threshold evaluation (15th--40th percentile) with comprehensive metrics---precision, recall, F1-score, accuracy, confusion matrices, ROC curves, and computing costs---providing a complete characterization of detection performance and practical deployment trade-offs.
+
+    \item Detailed documentation of the entire pipeline, from data loading and preprocessing through SimCLR training to anomaly detection and evaluation, at a level of detail that enables reproduction by other researchers.
+\end{enumerate}
+
+\section{Future Work}\label{sec:future_work}
+
+Several directions are identified for extending this research:
+
+\begin{enumerate}
+    \item \textbf{Multi-sensor extension.} The current two-sensor system should be extended to include additional automotive sensors---engine RPM, steering angle, brake pressure, and inertial measurement unit readings. A larger sensor set would provide richer multi-variate patterns and could enable sensor-level fault localization through ablation analysis, where each sensor is individually masked and the resulting change in similarity score indicates its contribution to the detected anomaly.
+
+    \item \textbf{Alternative SSL frameworks.} Comparing SimCLR with other contrastive methods such as TS2Vec \parencite{yue2022ts2vec}, MoCo \parencite{he2020momentum}, and BYOL \parencite{grill2020bootstrap} would establish which framework produces the most discriminative representations for automotive time-series data. TS2Vec is particularly promising because it is designed specifically for time-series and captures multi-scale temporal patterns.
+
+    \item \textbf{Fault severity estimation.} Beyond binary detection (healthy/faulty), the magnitude of the similarity deviation from the healthy centroid could be calibrated to estimate fault severity. This would enable prioritized alerting, where severe faults trigger immediate responses while minor anomalies are logged for later review.
+
+    \item \textbf{Adaptive thresholding.} A fixed threshold may not be optimal across all driving conditions. Developing an adaptive threshold that adjusts based on the current driving context (e.g., highway vs.\ urban driving) could reduce false alarms during dynamic maneuvers while maintaining sensitivity during steady-state operation.
+
+    \item \textbf{Real vehicle deployment.} The ultimate validation of the approach requires deployment on real vehicle sensor data from production test drives. This would test the framework under conditions of genuine sensor degradation, environmental interference, and the full diversity of real-world driving.
+
+    \item \textbf{Ensemble approaches.} Training multiple encoders with different random seeds and aggregating their anomaly scores could improve the robustness of detection. Earlier versions of the pipeline (V12) explored a five-seed ensemble for fault localization, and this concept could be extended to the detection task.
+
+    \item \textbf{Explainability integration.} Following the work of \textcite{ghannoum2025explainable}, integrating Explainable AI techniques could provide insights into which temporal segments and sensor channels contribute most to a fault detection decision. This would enhance the trustworthiness of the system in safety-critical applications where transparency is required for certification.
+\end{enumerate}
