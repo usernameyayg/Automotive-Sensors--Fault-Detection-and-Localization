@@ -1,0 +1,506 @@
+{
+  "a2d2": {
+    "total_samples": 219064,
+    "duration_sec": 2190.64,
+    "n_datasets": 3,
+    "acc_mean": 6.985197020048936,
+    "acc_std": 8.701829357174855,
+    "acc_min": 0.0,
+    "acc_max": 52.0,
+    "spd_mean": 17.205574388671543,
+    "spd_std": 14.784178713079417,
+    "spd_min": 0.0,
+    "spd_max": 73.35985183702073,
+    "correlation": 0.5268416002336009
+  },
+  "timing": {
+    "part1": 10.799319744110107,
+    "part2": 37.01551342010498,
+    "training_only": 26.563610792160034,
+    "part2_other": 10.451902627944946,
+    "embeddings": 1.0094075202941895,
+    "evaluation": 0.147904634475708,
+    "part3": 5.676276683807373,
+    "part3_embeddings": 1.0094075202941895,
+    "part3_evaluation": 0.147904634475708,
+    "part3_other": 4.518964529037476,
+    "total": 53.49110984802246
+  },
+  "scaler": {
+    "acc_mean": 6.985197020048936,
+    "acc_std": 8.701809495766117,
+    "spd_mean": 17.205574388671543,
+    "spd_std": 14.78414496906948
+  },
+  "training": {
+    "n_windows": 2189,
+    "window_shape": [
+      2189,
+      200,
+      2
+    ],
+    "batches_per_epoch": 17,
+    "total_steps": 850,
+    "encoder_params": 141504,
+    "projection_params": 99200,
+    "total_params": 240704,
+    "initial_loss": 4.078078003490672,
+    "final_loss": 3.791439112494974,
+    "loss_reduction_pct": 7.028774112470311,
+    "training_time_sec": 26.563610792160034,
+    "device": "cpu"
+  },
+  "healthy": {
+    "total_samples": 31881,
+    "used_samples": 9000,
+    "n_windows": 89
+  },
+  "binary": {
+    "15": {
+      "precision": 0.988791032826261,
+      "recall": 0.6462585034013606,
+      "f1": 0.7816455696202531,
+      "accuracy": 0.655,
+      "tn": 75,
+      "fp": 14,
+      "fn": 676,
+      "tp": 1235
+    },
+    "20": {
+      "precision": 0.9887288666249218,
+      "recall": 0.826268969126112,
+      "f1": 0.9002280501710376,
+      "accuracy": 0.825,
+      "tn": 71,
+      "fp": 18,
+      "fn": 332,
+      "tp": 1579
+    },
+    "25": {
+      "precision": 0.987012987012987,
+      "recall": 0.8749345892203035,
+      "f1": 0.9276005547850208,
+      "accuracy": 0.8695,
+      "tn": 67,
+      "fp": 22,
+      "fn": 239,
+      "tp": 1672
+    },
+    "30": {
+      "precision": 0.9847543760587238,
+      "recall": 0.912611198325484,
+      "f1": 0.9473112438891906,
+      "accuracy": 0.903,
+      "tn": 62,
+      "fp": 27,
+      "fn": 167,
+      "tp": 1744
+    },
+    "35": {
+      "precision": 0.9826524902070509,
+      "recall": 0.9188906331763474,
+      "f1": 0.9497025419145484,
+      "accuracy": 0.907,
+      "tn": 58,
+      "fp": 31,
+      "fn": 155,
+      "tp": 1756
+    },
+    "40": {
+      "precision": 0.9801214798453893,
+      "recall": 0.9288330716902146,
+      "f1": 0.9537882858678131,
+      "accuracy": 0.914,
+      "tn": 53,
+      "fp": 36,
+      "fn": 136,
+      "tp": 1775
+    }
+  },
+  "thresholds": {
+    "15": {
+      "threshold_value": 0.8892680406570435,
+      "avg_precision": 1.0,
+      "avg_recall": 0.6459537991182732,
+      "avg_f1": 0.7802033288947688,
+      "avg_accuracy": 0.6459537991182732,
+      "roc_auc": 0.8520746241452501,
+      "per_fault": [
+        {
+          "fault": "acc fault gain.csv",
+          "windows": 314,
+          "detected": 183,
+          "precision": 1.0,
+          "recall": 0.5828025477707006,
+          "f1": 0.7364185110663984,
+          "accuracy": 0.5828025477707006
+        },
+        {
+          "fault": "acc fault noise.csv",
+          "windows": 321,
+          "detected": 191,
+          "precision": 1.0,
+          "recall": 0.5950155763239875,
+          "f1": 0.74609375,
+          "accuracy": 0.5950155763239875
+        },
+        {
+          "fault": "acc fault stuck.csv",
+          "windows": 315,
+          "detected": 179,
+          "precision": 1.0,
+          "recall": 0.5682539682539682,
+          "f1": 0.7246963562753036,
+          "accuracy": 0.5682539682539682
+        },
+        {
+          "fault": "rpm fault gain.csv",
+          "windows": 321,
+          "detected": 281,
+          "precision": 1.0,
+          "recall": 0.8753894080996885,
+          "f1": 0.9335548172757475,
+          "accuracy": 0.8753894080996885
+        },
+        {
+          "fault": "rpm fault noise.csv",
+          "windows": 315,
+          "detected": 209,
+          "precision": 1.0,
+          "recall": 0.6634920634920635,
+          "f1": 0.7977099236641222,
+          "accuracy": 0.6634920634920635
+        },
+        {
+          "fault": "rpm fault stuck at.csv",
+          "windows": 325,
+          "detected": 192,
+          "precision": 1.0,
+          "recall": 0.5907692307692308,
+          "f1": 0.7427466150870407,
+          "accuracy": 0.5907692307692308
+        }
+      ]
+    },
+    "20": {
+      "threshold_value": 0.9197263121604919,
+      "avg_precision": 1.0,
+      "avg_recall": 0.8260361561921178,
+      "avg_f1": 0.9036843609328411,
+      "avg_accuracy": 0.8260361561921178,
+      "roc_auc": 0.8520746241452501,
+      "per_fault": [
+        {
+          "fault": "acc fault gain.csv",
+          "windows": 314,
+          "detected": 247,
+          "precision": 1.0,
+          "recall": 0.7866242038216561,
+          "f1": 0.8805704099821747,
+          "accuracy": 0.7866242038216561
+        },
+        {
+          "fault": "acc fault noise.csv",
+          "windows": 321,
+          "detected": 257,
+          "precision": 1.0,
+          "recall": 0.8006230529595015,
+          "f1": 0.889273356401384,
+          "accuracy": 0.8006230529595015
+        },
+        {
+          "fault": "acc fault stuck.csv",
+          "windows": 315,
+          "detected": 244,
+          "precision": 1.0,
+          "recall": 0.7746031746031746,
+          "f1": 0.8729874776386404,
+          "accuracy": 0.7746031746031746
+        },
+        {
+          "fault": "rpm fault gain.csv",
+          "windows": 321,
+          "detected": 304,
+          "precision": 1.0,
+          "recall": 0.9470404984423676,
+          "f1": 0.9728,
+          "accuracy": 0.9470404984423676
+        },
+        {
+          "fault": "rpm fault noise.csv",
+          "windows": 315,
+          "detected": 264,
+          "precision": 1.0,
+          "recall": 0.8380952380952381,
+          "f1": 0.9119170984455959,
+          "accuracy": 0.8380952380952381
+        },
+        {
+          "fault": "rpm fault stuck at.csv",
+          "windows": 325,
+          "detected": 263,
+          "precision": 1.0,
+          "recall": 0.8092307692307692,
+          "f1": 0.8945578231292517,
+          "accuracy": 0.8092307692307692
+        }
+      ]
+    },
+    "25": {
+      "threshold_value": 0.9452433586120605,
+      "avg_precision": 1.0,
+      "avg_recall": 0.8747518527070882,
+      "avg_f1": 0.9325045408760096,
+      "avg_accuracy": 0.8747518527070882,
+      "roc_auc": 0.8520746241452501,
+      "per_fault": [
+        {
+          "fault": "acc fault gain.csv",
+          "windows": 314,
+          "detected": 263,
+          "precision": 1.0,
+          "recall": 0.8375796178343949,
+          "f1": 0.9116117850953206,
+          "accuracy": 0.8375796178343949
+        },
+        {
+          "fault": "acc fault noise.csv",
+          "windows": 321,
+          "detected": 275,
+          "precision": 1.0,
+          "recall": 0.8566978193146417,
+          "f1": 0.9228187919463087,
+          "accuracy": 0.8566978193146417
+        },
+        {
+          "fault": "acc fault stuck.csv",
+          "windows": 315,
+          "detected": 261,
+          "precision": 1.0,
+          "recall": 0.8285714285714286,
+          "f1": 0.90625,
+          "accuracy": 0.8285714285714286
+        },
+        {
+          "fault": "rpm fault gain.csv",
+          "windows": 321,
+          "detected": 312,
+          "precision": 1.0,
+          "recall": 0.9719626168224299,
+          "f1": 0.985781990521327,
+          "accuracy": 0.9719626168224299
+        },
+        {
+          "fault": "rpm fault noise.csv",
+          "windows": 315,
+          "detected": 282,
+          "precision": 1.0,
+          "recall": 0.8952380952380953,
+          "f1": 0.9447236180904522,
+          "accuracy": 0.8952380952380953
+        },
+        {
+          "fault": "rpm fault stuck at.csv",
+          "windows": 325,
+          "detected": 279,
+          "precision": 1.0,
+          "recall": 0.8584615384615385,
+          "f1": 0.9238410596026491,
+          "accuracy": 0.8584615384615385
+        }
+      ]
+    },
+    "30": {
+      "threshold_value": 0.9668579697608948,
+      "avg_precision": 1.0,
+      "avg_recall": 0.9125088807081783,
+      "avg_f1": 0.9536608053045453,
+      "avg_accuracy": 0.9125088807081783,
+      "roc_auc": 0.8520746241452501,
+      "per_fault": [
+        {
+          "fault": "acc fault gain.csv",
+          "windows": 314,
+          "detected": 278,
+          "precision": 1.0,
+          "recall": 0.8853503184713376,
+          "f1": 0.9391891891891891,
+          "accuracy": 0.8853503184713376
+        },
+        {
+          "fault": "acc fault noise.csv",
+          "windows": 321,
+          "detected": 284,
+          "precision": 1.0,
+          "recall": 0.8847352024922118,
+          "f1": 0.9388429752066115,
+          "accuracy": 0.8847352024922118
+        },
+        {
+          "fault": "acc fault stuck.csv",
+          "windows": 315,
+          "detected": 272,
+          "precision": 1.0,
+          "recall": 0.8634920634920635,
+          "f1": 0.9267461669505963,
+          "accuracy": 0.8634920634920635
+        },
+        {
+          "fault": "rpm fault gain.csv",
+          "windows": 321,
+          "detected": 320,
+          "precision": 1.0,
+          "recall": 0.9968847352024922,
+          "f1": 0.9984399375975039,
+          "accuracy": 0.9968847352024922
+        },
+        {
+          "fault": "rpm fault noise.csv",
+          "windows": 315,
+          "detected": 299,
+          "precision": 1.0,
+          "recall": 0.9492063492063492,
+          "f1": 0.9739413680781759,
+          "accuracy": 0.9492063492063492
+        },
+        {
+          "fault": "rpm fault stuck at.csv",
+          "windows": 325,
+          "detected": 291,
+          "precision": 1.0,
+          "recall": 0.8953846153846153,
+          "f1": 0.9448051948051948,
+          "accuracy": 0.8953846153846153
+        }
+      ]
+    },
+    "35": {
+      "threshold_value": 0.9685870409011841,
+      "avg_precision": 1.0,
+      "avg_recall": 0.9187846329205934,
+      "avg_f1": 0.9571867804260658,
+      "avg_accuracy": 0.9187846329205934,
+      "roc_auc": 0.8520746241452501,
+      "per_fault": [
+        {
+          "fault": "acc fault gain.csv",
+          "windows": 314,
+          "detected": 281,
+          "precision": 1.0,
+          "recall": 0.8949044585987261,
+          "f1": 0.9445378151260504,
+          "accuracy": 0.8949044585987261
+        },
+        {
+          "fault": "acc fault noise.csv",
+          "windows": 321,
+          "detected": 287,
+          "precision": 1.0,
+          "recall": 0.8940809968847352,
+          "f1": 0.944078947368421,
+          "accuracy": 0.8940809968847352
+        },
+        {
+          "fault": "acc fault stuck.csv",
+          "windows": 315,
+          "detected": 275,
+          "precision": 1.0,
+          "recall": 0.873015873015873,
+          "f1": 0.9322033898305084,
+          "accuracy": 0.873015873015873
+        },
+        {
+          "fault": "rpm fault gain.csv",
+          "windows": 321,
+          "detected": 320,
+          "precision": 1.0,
+          "recall": 0.9968847352024922,
+          "f1": 0.9984399375975039,
+          "accuracy": 0.9968847352024922
+        },
+        {
+          "fault": "rpm fault noise.csv",
+          "windows": 315,
+          "detected": 299,
+          "precision": 1.0,
+          "recall": 0.9492063492063492,
+          "f1": 0.9739413680781759,
+          "accuracy": 0.9492063492063492
+        },
+        {
+          "fault": "rpm fault stuck at.csv",
+          "windows": 325,
+          "detected": 294,
+          "precision": 1.0,
+          "recall": 0.9046153846153846,
+          "f1": 0.9499192245557351,
+          "accuracy": 0.9046153846153846
+        }
+      ]
+    },
+    "40": {
+      "threshold_value": 0.9714135527610779,
+      "avg_precision": 1.0,
+      "avg_recall": 0.9287297143949326,
+      "avg_f1": 0.9626490586105202,
+      "avg_accuracy": 0.9287297143949326,
+      "roc_auc": 0.8520746241452501,
+      "per_fault": [
+        {
+          "fault": "acc fault gain.csv",
+          "windows": 314,
+          "detected": 285,
+          "precision": 1.0,
+          "recall": 0.9076433121019108,
+          "f1": 0.9515859766277128,
+          "accuracy": 0.9076433121019108
+        },
+        {
+          "fault": "acc fault noise.csv",
+          "windows": 321,
+          "detected": 291,
+          "precision": 1.0,
+          "recall": 0.9065420560747663,
+          "f1": 0.9509803921568627,
+          "accuracy": 0.9065420560747663
+        },
+        {
+          "fault": "acc fault stuck.csv",
+          "windows": 315,
+          "detected": 279,
+          "precision": 1.0,
+          "recall": 0.8857142857142857,
+          "f1": 0.9393939393939394,
+          "accuracy": 0.8857142857142857
+        },
+        {
+          "fault": "rpm fault gain.csv",
+          "windows": 321,
+          "detected": 321,
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "accuracy": 1.0
+        },
+        {
+          "fault": "rpm fault noise.csv",
+          "windows": 315,
+          "detected": 301,
+          "precision": 1.0,
+          "recall": 0.9555555555555556,
+          "f1": 0.9772727272727273,
+          "accuracy": 0.9555555555555556
+        },
+        {
+          "fault": "rpm fault stuck at.csv",
+          "windows": 325,
+          "detected": 298,
+          "precision": 1.0,
+          "recall": 0.916923076923077,
+          "f1": 0.956661316211878,
+          "accuracy": 0.916923076923077
+        }
+      ]
+    }
+  }
+}
