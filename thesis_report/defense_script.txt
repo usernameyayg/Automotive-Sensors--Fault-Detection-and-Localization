@@ -213,16 +213,16 @@ at every single threshold. This means that every window the system flags
 as faulty within each fault scenario is indeed faulty. There are zero false
 positives in the per-fault evaluation.
 
-Recall increases monotonically from 64.6 percent at the 15th percentile to
-92.9 percent at the 40th percentile. The F1-score correspondingly increases
-from 0.780 to 0.963.
+Recall increases monotonically from 70.7 percent at the 15th percentile to
+93.3 percent at the 40th percentile. The F1-score correspondingly increases
+from 0.825 to 0.965.
 
 The plot on the left visualizes this trade-off. Since precision is already
 perfect, increasing the threshold only improves recall without any precision
 penalty. The optimal operating point is at the 40th percentile, where the
-F1-score reaches its maximum of 0.963.
+F1-score reaches its maximum of 0.965.
 
-The ROC-AUC is 0.852, confirming that the learned representations provide
+The ROC-AUC is 0.858, confirming that the learned representations provide
 genuine discriminative power between healthy and faulty windows.
 
 
@@ -232,12 +232,12 @@ The recall heatmap reveals important differences between fault types and
 sensor locations.
 
 Speed sensor faults are consistently easier to detect than accelerator faults.
-At the 40th percentile, speed gain faults achieve 100 percent recall -- every
-single window out of 321 is correctly detected. Speed noise reaches 95.6
-percent and speed stuck-at reaches 91.7 percent.
+At the 40th percentile, speed gain faults achieve 99.7 percent recall -- 320
+out of 321 windows correctly detected. Speed noise reaches 95.9 percent and
+speed stuck-at reaches 91.1 percent.
 
-Accelerator faults are harder to detect, ranging from 88.6 percent for
-stuck-at to 90.8 percent for gain faults. This makes physical sense: the
+Accelerator faults are harder to detect, ranging from 89.8 percent for
+stuck-at to 91.7 percent for gain faults. This makes physical sense: the
 accelerator signal has higher natural variability because drivers constantly
 adjust the pedal, so some fault patterns overlap with normal driving behavior.
 The speed signal, on the other hand, changes slowly due to vehicle inertia,
@@ -252,11 +252,11 @@ SLIDE 14: BINARY CLASSIFICATION [11:30 - 12:15]
 --------------------------------------------------------------------------------
 For the binary classification task -- simply distinguishing healthy from
 faulty regardless of fault type -- the results at the 40th percentile show
-an accuracy of 91.4 percent.
+an accuracy of 91.8 percent.
 
-The confusion matrix shows 1,775 true positives and 53 true negatives,
-with 36 false positives and 136 false negatives. The binary precision is
-98.0 percent, recall is 92.9 percent, and F1-score is 0.954.
+The confusion matrix shows 1,783 true positives and 53 true negatives,
+with 36 false positives and 128 false negatives. The binary precision is
+98.0 percent, recall is 93.3 percent, and F1-score is 0.956.
 
 The confusion matrices on the left show how detection improves as we increase
 the threshold percentile -- more true positives with a moderate increase in
@@ -267,7 +267,7 @@ SLIDE 15: ROC AND SIMILARITY [12:15 - 13:00]
 --------------------------------------------------------------------------------
 The ROC curve on the left shows the trade-off between true positive rate
 and false positive rate across all six thresholds. The area under the curve
-is 0.852, well above the random baseline of 0.5.
+is 0.858, well above the random baseline of 0.5.
 
 The similarity distribution plot on the right provides visual insight into
 why the system works: the healthy distribution is concentrated at high
@@ -282,17 +282,18 @@ detection accuracy.
 SLIDE 16: COMPUTING COSTS [13:00 - 13:45]
 --------------------------------------------------------------------------------
 An important practical consideration is the computational cost. The entire
-end-to-end pipeline completes in under 54 seconds on CPU.
+end-to-end pipeline completes in about 147 seconds -- under 2.5 minutes --
+on CPU.
 
-Training accounts for about half of this time at 26.6 seconds, but it is a
-one-time cost -- the trained encoder is saved and reused. Inference is
+Training accounts for the majority of this time at 118 seconds, but it is
+a one-time cost -- the trained encoder is saved and reused. Inference is
 extremely fast: embedding extraction for all fault windows takes about
-1 second, corresponding to approximately 0.5 milliseconds per window. This
-makes the system suitable for near-real-time deployment.
+1.6 seconds, corresponding to approximately 0.8 milliseconds per window.
+This makes the system suitable for near-real-time deployment.
 
 For comparison, the supervised CNN-GRU model by Ghannoum required 23,000
 seconds -- over 6 hours -- of training on labeled data. Our self-supervised
-approach is approximately 860 times faster while requiring no labeled data
+approach is approximately 157 times faster while requiring no labeled data
 at all.
 
 
@@ -306,11 +307,11 @@ to simulation works without any labeled fault examples, validating the core
 hypothesis of this thesis.
 
 For RQ2: Per-fault precision remains perfect at 1.0 across all six thresholds,
-while recall ranges from 64.6 to 92.9 percent. The optimal balanced threshold
-is at the 40th percentile with an F1-score of 0.963.
+while recall ranges from 70.7 to 93.3 percent. The optimal balanced threshold
+is at the 40th percentile with an F1-score of 0.965.
 
-For RQ3: Speed gain faults are the most detectable at 100 percent recall,
-while accelerator stuck-at faults are the hardest at 88.6 percent.
+For RQ3: Speed gain faults are the most detectable at 99.7 percent recall,
+while accelerator stuck-at faults are the hardest at 89.8 percent.
 Detectability correlates with the physical severity of the fault and the
 natural variability of the sensor signal.
 
@@ -347,16 +348,17 @@ Thank you for your attention. I am happy to answer any questions.
 POTENTIAL QUESTIONS AND PREPARED ANSWERS
 ================================================================================
 
-Q1: Why is the loss reduction only 7%? Does the model converge properly?
+Q1: Why is the loss reduction only 7.1%? Does the model converge properly?
 A: The NT-Xent loss has a theoretical minimum that depends on the batch size
    (log(2N-1) for batch size N). With batch size 128, this minimum is
    approximately log(255) = 5.54 in natural log, or about 3.69 in the loss
-   scale we use. Our final loss of 3.79 is very close to this theoretical
-   minimum, indicating good convergence. The 7% reduction from 4.08 to 3.79
-   represents meaningful learning despite appearing small in absolute terms.
+   scale we use. Our final loss of 3.7955 is very close to this theoretical
+   minimum, indicating good convergence. The 7.1% reduction from 4.0855 to
+   3.7955 represents meaningful learning despite appearing small in absolute
+   terms.
 
-Q2: Why is the ROC-AUC only 0.852 and not higher?
-A: The ROC-AUC of 0.852 reflects the overlap between healthy and faulty
+Q2: Why is the ROC-AUC only 0.858 and not higher?
+A: The ROC-AUC of 0.858 reflects the overlap between healthy and faulty
    similarity distributions. Some fault windows, particularly mild faults,
    produce embeddings similar to healthy data. However, the per-fault precision
    of 1.0 shows that when the system does flag a window, it is always correct.
@@ -364,7 +366,7 @@ A: The ROC-AUC of 0.852 reflects the overlap between healthy and faulty
    or additional sensor channels.
 
 Q3: How does this compare to supervised approaches?
-A: Our approach achieves 91.4% accuracy and 92.9% recall without any labeled
+A: Our approach achieves 91.8% accuracy and 93.3% recall without any labeled
    data, compared to supervised methods that typically achieve 95-99% but
    require extensive labeled datasets. The key advantage is that our method
    works immediately on new fault types without retraining, while supervised
@@ -400,7 +402,7 @@ A: 90 seconds yields 89 windows, which is sufficient to estimate a stable
 Q8: Why is per-fault precision 1.0 but binary precision is 98%?
 A: Per-fault precision is evaluated within each fault scenario separately --
    the system never misclassifies a healthy window when comparing only
-   against faulty windows of the same type. Binary precision of 98% includes
+   against faulty windows of the same type. Binary precision of 98.0% includes
    healthy windows being misclassified as faulty (36 false positives out of
    89 healthy windows), which occurs when healthy windows happen to fall
    below the threshold. This is expected with higher thresholds and represents
