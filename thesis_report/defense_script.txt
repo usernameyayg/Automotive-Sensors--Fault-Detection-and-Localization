@@ -1,7 +1,7 @@
 ================================================================================
 MASTER THESIS DEFENSE - SPEAKER SCRIPT
 ================================================================================
-Total Duration: ~15 minutes (18 slides)
+Total Duration: ~15 minutes (19 slides)
 Timing guide per slide is marked with [TIME]
 ================================================================================
 
@@ -18,10 +18,11 @@ and Systems Engineering.
 SLIDE 2: OUTLINE [0:30 - 0:50]
 --------------------------------------------------------------------------------
 I have structured this presentation into ten parts. I will begin with the
-motivation and problem statement, introduce the relevant background, then
-present our three-phase framework, the datasets, the training process, and
-finally the comprehensive evaluation results including computing costs. I
-will conclude with a summary of findings and directions for future work.
+motivation and problem statement, introduce the research questions, explain
+why we chose SimCLR among other self-supervised methods, then present our
+three-phase framework, the datasets, the training process, and finally the
+comprehensive evaluation results. I will conclude with a summary and
+directions for future work.
 
 
 SLIDE 3: MOTIVATION [0:50 - 2:00]
@@ -59,61 +60,79 @@ representations that effectively detect sensor faults when applied to HIL
 simulation data? This tests the core feasibility of the approach.
 
 Second, how does the detection threshold affect the trade-off between precision
-and recall? This is critical for practical deployment, where different safety
-integrity levels demand different operating points.
+and recall? We evaluate six percentile levels from the 15th to the 40th to
+find the optimal operating point.
 
 Third, which fault types and sensor locations are most and least detectable, and
-can we explain why from a physical perspective? Understanding this helps
-identify the strengths and limitations of the approach.
+can we explain the differences from a physical perspective? Understanding this
+helps identify the strengths and limitations of the approach.
 
 
-SLIDE 5: PROPOSED FRAMEWORK [2:45 - 4:00]
+SLIDE 5: RELATED WORK - WHY SimCLR? [2:45 - 3:45]
+--------------------------------------------------------------------------------
+Before presenting our framework, let me explain why we chose SimCLR among
+several self-supervised learning methods.
+
+The table on the left compares five prominent SSL approaches. MoCo requires
+a momentum encoder and a memory bank, adding architectural complexity. BYOL
+also needs a momentum encoder with asymmetric networks. TS2Vec and TS-TCC,
+while designed specifically for time series, have higher implementation
+complexity.
+
+SimCLR stands out for its simplicity: it requires only a shared encoder and
+a projection head -- no momentum encoder, no memory bank. Despite this
+simplicity, it has shown strong performance across domains.
+
+Prior work has applied SimCLR successfully to bearing fault detection and
+motor diagnosis. However, no previous work has applied SimCLR specifically
+to automotive sensor fault detection -- this is the research gap we address.
+
+
+SLIDE 6: PROPOSED FRAMEWORK [3:45 - 5:00]
 --------------------------------------------------------------------------------
 Our framework consists of three distinct phases.
 
 In Phase 1, shown in green, we load real-world driving data from the Audi A2D2
 dataset. This data undergoes preprocessing -- Z-score normalization and sliding
-window segmentation with a window size of 200 samples and 50% overlap. The
-windows are then augmented using three strategies: Gaussian jittering, amplitude
-scaling, and temporal masking. The augmented views are used to train a 1D-CNN
-encoder using the SimCLR contrastive learning objective. The key outcome is a
-trained encoder that maps time-series windows into a 256-dimensional embedding
-space.
+window segmentation with a window size of 200 samples and 50 percent overlap.
+The windows are then augmented using three strategies: Gaussian jittering,
+amplitude scaling, and temporal masking. The augmented views are used to train
+a 1D-CNN encoder using the SimCLR contrastive learning objective. The key
+outcome is a trained encoder that maps time-series windows into a
+256-dimensional embedding space.
 
 In Phase 2, shown in blue, we take a small amount of healthy HIL data -- just
-90 seconds -- and pass it through the frozen encoder. From the resulting
-embeddings, we compute a healthy centroid and establish the similarity-based
+90 seconds, yielding 89 windows -- and pass it through the frozen encoder.
+From the resulting embeddings, we compute a healthy centroid and establish the
 detection thresholds at six percentile levels.
 
 In Phase 3, shown in orange, we process the fault-injected HIL data through
-the same frozen encoder, compute the cosine similarity of each window's
-embedding to the healthy centroid, and compare it against the thresholds. If
-the similarity falls below the threshold, the window is classified as faulty.
+the same frozen encoder, compute the cosine similarity to the healthy centroid,
+and compare against the thresholds.
 
 
-SLIDE 6: DATASETS [4:00 - 5:15]
+SLIDE 7: DATASETS [5:00 - 6:00]
 --------------------------------------------------------------------------------
 We use two complementary data sources, which is a key aspect of this work.
 
 The A2D2 dataset, from Audi, contains real-world driving recordings from Munich.
 We used three recording sessions, yielding 219,064 samples -- approximately
-36 and a half minutes at 100 Hertz. We extract two sensor channels: the
-accelerator pedal position in percent and the vehicle speed in kilometers per
-hour. The speed signal is upsampled from 50 to 100 Hertz using linear
-interpolation. Importantly, only healthy data is used for training.
+36.5 minutes at 100 Hertz. We extract two sensor channels: the accelerator
+pedal position in percent and the vehicle speed in kilometers per hour. The
+speed signal is upsampled from 50 to 100 Hertz using linear interpolation.
+Importantly, only healthy data is used for training.
 
-The HIL dataset comes from a dSPACE Hardware-in-the-Loop test bench here at TU
-Clausthal. It contains one healthy recording and six fault-injected recordings
-covering three fault types applied to two sensors. The first 90 seconds of the
-healthy recording are used for calibration.
+The HIL dataset comes from a dSPACE Hardware-in-the-Loop test bench here at
+TU Clausthal. It contains one healthy recording and six fault-injected
+recordings covering three fault types applied to two sensors. The first 90
+seconds of the healthy recording, yielding 89 windows, are used for
+calibration.
 
-The figure at the bottom illustrates this dataset fusion: the top panel shows
-the A2D2 healthy speed signal, and the bottom shows the HIL speed signal with
-the fault region highlighted. Notice the cross-domain nature of this setup --
-we train on real vehicle data and test on simulation data.
+Notice the cross-domain nature of this setup -- we train on real vehicle data
+and test on simulation data.
 
 
-SLIDE 7: FAULT TYPES [5:15 - 6:00]
+SLIDE 8: FAULT TYPES [6:00 - 6:45]
 --------------------------------------------------------------------------------
 We evaluate three types of sensor faults, each modeling a different physical
 failure mechanism.
@@ -124,87 +143,79 @@ simulating electromagnetic interference or loose connections. The stuck-at
 fault freezes the sensor output at a constant value, simulating a complete
 hardware failure.
 
-The figure shows these three fault types applied to a real accelerator pedal
-signal, with the healthy baseline shown in the top left for comparison.
+The figure shows these three fault types applied to a sensor signal, with
+the healthy baseline shown in the top left for comparison. Each fault is
+expressed as a simple mathematical equation.
 
 
-SLIDE 8: SIMCLR ARCHITECTURE [6:00 - 7:00]
+SLIDE 9: SimCLR AND ENCODER [6:45 - 7:45]
 --------------------------------------------------------------------------------
 The SimCLR framework operates as follows. Given an input window, we generate
 two different augmented views. Both views pass through the same shared 1D-CNN
-encoder, producing 256-dimensional embeddings. These embeddings are then
-projected through a two-layer projection head into a 128-dimensional space
-where the contrastive loss is computed.
+encoder, producing 256-dimensional embeddings. These are projected through a
+two-layer projection head into 128-dimensional space where the NT-Xent
+contrastive loss is computed.
 
-The NT-Xent loss, shown at the bottom, maximizes the agreement between the two
-views of the same window -- the positive pair -- while minimizing the agreement
-with all other windows in the batch -- the negative pairs. With a batch size of
-128, each sample has 254 negative pairs. The temperature parameter tau is set
-to 0.5.
+The loss maximizes agreement between the two views of the same window -- the
+positive pair -- while minimizing agreement with all other windows in the
+batch -- 254 negative pairs. The temperature parameter is 0.5.
 
-After training, the projection head is discarded, and only the encoder is kept
-for anomaly detection.
+The encoder itself, shown at the bottom, is a three-block 1D-CNN. Block 1
+uses 64 filters with kernel size 7, Block 2 uses 128 filters with kernel
+size 5, and Block 3 uses 256 filters with kernel size 3. Adaptive average
+pooling produces the final 256-dimensional embedding. The total model has
+240,704 parameters -- a lightweight architecture enabling fast training.
 
 
-SLIDE 9: ENCODER ARCHITECTURE [7:00 - 7:45]
+SLIDE 10: AUGMENTATION AND PREPROCESSING [7:45 - 8:30]
 --------------------------------------------------------------------------------
-The encoder is a three-block 1D Convolutional Neural Network designed
-specifically for time-series sensor data. The input is a two-channel window of
-200 time steps.
+The data preprocessing pipeline consists of three steps.
 
-Block 1 uses 64 filters with kernel size 7 and stride 2, followed by batch
-normalization, ReLU, and max pooling. Block 2 increases to 128 filters with
-kernel size 5. Block 3 further increases to 256 filters with kernel size 3.
-Adaptive average pooling at the end collapses the temporal dimension into a
-fixed-size 256-dimensional embedding vector.
+First, Z-score normalization using the mean and standard deviation computed
+from the A2D2 training data. Second, sliding window segmentation with a
+window size of 200 samples and 50 percent overlap, producing 2,189 training
+windows. Third, data augmentation.
 
-The total model has approximately 241 thousand parameters -- a relatively
-lightweight architecture that enables fast training and inference.
-
-
-SLIDE 10: TRAINING RESULTS [7:45 - 8:30]
---------------------------------------------------------------------------------
-The training curves show that the NT-Xent loss decreases rapidly in the first
-ten epochs and then converges gradually. The initial loss of 4.08 decreases to
-a final loss of 3.79, representing a 7 percent reduction.
-
-Training completed in just 26.6 seconds on CPU, processing 2,189 windows over
-50 epochs with 17 batches per epoch. This is remarkably fast compared to
-supervised approaches that typically require hours of training on labeled data.
-
-The three augmentation strategies -- jittering, scaling, and masking -- ensure
-that the encoder learns representations that are invariant to minor
-perturbations while remaining sensitive to genuine fault patterns.
+The three augmentation strategies are shown in the figure: Gaussian jittering
+with sigma of 0.1 simulates sensor noise, amplitude scaling between 0.8 and
+1.2 simulates calibration variance, and temporal masking of 10 percent forces
+temporal robustness. These ensure the encoder learns representations invariant
+to minor perturbations while remaining sensitive to genuine fault patterns.
 
 
 SLIDE 11: ANOMALY DETECTION METHOD [8:30 - 9:30]
 --------------------------------------------------------------------------------
 The anomaly detection process works as follows.
 
-During calibration, we pass 89 healthy HIL windows through the frozen encoder,
-compute the mean embedding -- the healthy centroid -- and calculate the cosine
-similarity of each healthy window to this centroid. The thresholds are set at
-six percentile levels of this similarity distribution.
+During calibration -- Phase 2 -- we pass 89 healthy HIL windows through the
+frozen encoder, compute the mean embedding -- the healthy centroid -- and
+calculate the cosine similarity of each healthy window to this centroid.
+The thresholds are set at six percentile levels of this similarity
+distribution: the 15th, 20th, 25th, 30th, 35th, and 40th.
 
-During detection, each test window is encoded, and its cosine similarity to
-the healthy centroid is computed. If this similarity falls below the threshold,
-the window is classified as faulty. The intuition is straightforward: healthy
-data produces embeddings similar to the healthy centroid, while faulty data
-produces embeddings that deviate from it.
+During detection -- Phase 3 -- each test window is encoded, and its cosine
+similarity to the healthy centroid is computed. If this similarity falls
+below the threshold, the window is classified as faulty. If it is above,
+the window is classified as healthy.
+
+The intuition is straightforward: healthy data produces embeddings similar
+to the healthy centroid, while faulty data produces embeddings that deviate
+from it.
 
 
-SLIDE 12: MULTI-THRESHOLD RESULTS [9:30 - 10:45]
+SLIDE 12: MULTI-THRESHOLD RESULTS [9:30 - 10:30]
 --------------------------------------------------------------------------------
-Now let me present the core results. The table on the right shows the detection
-performance across all six thresholds.
+Now let me present the core results. The table on the right shows the
+detection performance across all six thresholds.
 
-The most striking finding is that precision is perfect -- 1.0 -- at every single
-threshold. This means that every window the system flags as faulty is indeed
-faulty. There are zero false positives in the per-fault evaluation.
+The most striking finding is that per-fault precision is perfect -- 1.0 --
+at every single threshold. This means that every window the system flags
+as faulty within each fault scenario is indeed faulty. There are zero false
+positives in the per-fault evaluation.
 
 Recall increases monotonically from 64.6 percent at the 15th percentile to
 92.9 percent at the 40th percentile. The F1-score correspondingly increases
-from 0.78 to 0.963.
+from 0.780 to 0.963.
 
 The plot on the left visualizes this trade-off. Since precision is already
 perfect, increasing the threshold only improves recall without any precision
@@ -215,54 +226,67 @@ The ROC-AUC is 0.852, confirming that the learned representations provide
 genuine discriminative power between healthy and faulty windows.
 
 
-SLIDE 13: PER-FAULT RESULTS [10:45 - 12:00]
+SLIDE 13: PER-FAULT RESULTS [10:30 - 11:30]
 --------------------------------------------------------------------------------
-The recall heatmap reveals important differences between fault types and sensor
-locations.
+The recall heatmap reveals important differences between fault types and
+sensor locations.
 
 Speed sensor faults are consistently easier to detect than accelerator faults.
 At the 40th percentile, speed gain faults achieve 100 percent recall -- every
-single faulty window is detected. Speed noise reaches 95.6 percent and speed
-stuck-at reaches 91.7 percent.
+single window out of 321 is correctly detected. Speed noise reaches 95.6
+percent and speed stuck-at reaches 91.7 percent.
 
-Accelerator faults are harder to detect, ranging from 88.6 percent for stuck-at
-to 90.8 percent for gain faults. This makes physical sense: the accelerator
-signal has higher natural variability because drivers constantly adjust the
-pedal, so some fault patterns overlap with normal driving behavior. The speed
-signal, on the other hand, changes slowly due to vehicle inertia, making any
-deviation more conspicuous.
+Accelerator faults are harder to detect, ranging from 88.6 percent for
+stuck-at to 90.8 percent for gain faults. This makes physical sense: the
+accelerator signal has higher natural variability because drivers constantly
+adjust the pedal, so some fault patterns overlap with normal driving behavior.
+The speed signal, on the other hand, changes slowly due to vehicle inertia,
+making any deviation more conspicuous.
 
-This sensor-dependent and fault-dependent detectability is actually a strength
-of the approach -- it reflects the physical reality that more severe and unusual
-faults are inherently more distinguishable from normal operation.
+This sensor-dependent and fault-dependent detectability reflects the physical
+reality that more severe and unusual faults are inherently more
+distinguishable from normal operation.
 
 
-SLIDE 14: BINARY CLASSIFICATION AND ROC [12:00 - 13:00]
+SLIDE 14: BINARY CLASSIFICATION [11:30 - 12:15]
 --------------------------------------------------------------------------------
-For the binary classification task -- simply distinguishing healthy from faulty
-regardless of fault type -- the results at the 40th percentile show an accuracy
-of 91.4 percent, with 1,775 true positives and only 36 false positives out of
-89 healthy windows.
+For the binary classification task -- simply distinguishing healthy from
+faulty regardless of fault type -- the results at the 40th percentile show
+an accuracy of 91.4 percent.
 
-The confusion matrices on the left show how the detection improves as we
-increase the threshold percentile -- more true positives with a moderate
-increase in false positives.
+The confusion matrix shows 1,775 true positives and 53 true negatives,
+with 36 false positives and 136 false negatives. The binary precision is
+98.0 percent, recall is 92.9 percent, and F1-score is 0.954.
 
-The similarity distribution plot on the right provides visual insight into why
-the system works: the healthy distribution is concentrated at high similarity
-values near 1.0, while the faulty distribution is shifted toward lower values.
-The vertical threshold lines show where the decision boundary is placed at
-each percentile level.
+The confusion matrices on the left show how detection improves as we increase
+the threshold percentile -- more true positives with a moderate increase in
+false positives.
 
 
-SLIDE 15: COMPUTING COSTS [13:00 - 13:45]
+SLIDE 15: ROC AND SIMILARITY [12:15 - 13:00]
+--------------------------------------------------------------------------------
+The ROC curve on the left shows the trade-off between true positive rate
+and false positive rate across all six thresholds. The area under the curve
+is 0.852, well above the random baseline of 0.5.
+
+The similarity distribution plot on the right provides visual insight into
+why the system works: the healthy distribution is concentrated at high
+similarity values near 1.0, while the faulty distribution is shifted toward
+lower values. The vertical threshold lines show where the decision boundary
+is placed at each percentile level.
+
+The clear separation between these two distributions is what enables high
+detection accuracy.
+
+
+SLIDE 16: COMPUTING COSTS [13:00 - 13:45]
 --------------------------------------------------------------------------------
 An important practical consideration is the computational cost. The entire
 end-to-end pipeline completes in under 54 seconds on CPU.
 
 Training accounts for about half of this time at 26.6 seconds, but it is a
 one-time cost -- the trained encoder is saved and reused. Inference is
-extremely fast: embedding extraction for all 2,000 fault windows takes just
+extremely fast: embedding extraction for all fault windows takes about
 1 second, corresponding to approximately 0.5 milliseconds per window. This
 makes the system suitable for near-real-time deployment.
 
@@ -272,7 +296,7 @@ approach is approximately 860 times faster while requiring no labeled data
 at all.
 
 
-SLIDE 16: CONCLUSION [13:45 - 14:45]
+SLIDE 17: CONCLUSION [13:45 - 14:45]
 --------------------------------------------------------------------------------
 To summarize the answers to our three research questions.
 
@@ -281,39 +305,40 @@ detects sensor faults in HIL data. The cross-domain transfer from real driving
 to simulation works without any labeled fault examples, validating the core
 hypothesis of this thesis.
 
-For RQ2: Precision remains perfect at 1.0 across all six thresholds, while
-recall ranges from 64.6 to 92.9 percent. The optimal balanced threshold is at
-the 40th percentile with an F1-score of 0.963.
+For RQ2: Per-fault precision remains perfect at 1.0 across all six thresholds,
+while recall ranges from 64.6 to 92.9 percent. The optimal balanced threshold
+is at the 40th percentile with an F1-score of 0.963.
 
-For RQ3: Speed gain faults are the most detectable at 100 percent recall, while
-accelerator stuck-at faults are the hardest at 88.6 percent. Detectability
-correlates with the physical severity of the fault and the natural variability
-of the sensor signal.
+For RQ3: Speed gain faults are the most detectable at 100 percent recall,
+while accelerator stuck-at faults are the hardest at 88.6 percent.
+Detectability correlates with the physical severity of the fault and the
+natural variability of the sensor signal.
 
-The four key contributions of this work are: the first application of SimCLR to
-automotive sensor fault detection, successful cross-domain transfer from real
-driving data to HIL simulation, a comprehensive multi-threshold evaluation with
-six fault scenarios, and a complete pipeline that runs in under one minute.
+The four key contributions of this work are: the first application of SimCLR
+to automotive sensor fault detection, successful cross-domain transfer from
+real driving data to HIL simulation, a comprehensive multi-threshold
+evaluation with six fault scenarios, and a complete pipeline that runs in
+under one minute on CPU.
 
 
-SLIDE 17: FUTURE WORK [14:45 - 15:15]
+SLIDE 18: FUTURE WORK [14:45 - 15:15]
 --------------------------------------------------------------------------------
 Several directions for future work emerge from this thesis.
 
 In the short term, extending the framework to additional sensor channels such
 as engine RPM, steering angle, and brake pressure would provide richer multi-
 variate information. Implementing fault localization -- identifying which
-specific sensor is faulty -- is another natural extension. Adaptive thresholding
-mechanisms could eliminate the need for manual threshold selection.
+specific sensor is faulty -- is another natural extension. Adaptive
+thresholding would eliminate manual threshold selection.
 
 In the longer term, comparing with alternative self-supervised methods such as
 TS2Vec, MoCo, and BYOL would help identify the most effective approach.
-Explainability techniques could provide diagnostic insights, and edge deployment
-would enable real-time in-vehicle fault detection integrated with the ISO 26262
-safety framework.
+Explainability techniques could provide diagnostic insights, and edge
+deployment would enable real-time in-vehicle fault detection integrated with
+the ISO 26262 safety framework.
 
 
-SLIDE 18: THANK YOU [15:15 - 15:30]
+SLIDE 19: THANK YOU [15:15 - 15:30]
 --------------------------------------------------------------------------------
 Thank you for your attention. I am happy to answer any questions.
 
@@ -360,8 +385,10 @@ A: Yes. Inference takes 0.5ms per window on CPU. A 2-second window at 100Hz
 Q6: Why SimCLR and not other SSL methods like TS2Vec?
 A: SimCLR was chosen for its simplicity, strong theoretical foundation, and
    proven effectiveness across domains. It requires no momentum encoder (unlike
-   MoCo) and no asymmetric architecture (unlike BYOL). Future work should
-   compare with time-series-specific methods like TS2Vec and TS-TCC.
+   MoCo) and no asymmetric architecture (unlike BYOL). As shown in our
+   comparison slide, SimCLR has the lowest architectural complexity while
+   still providing strong contrastive learning. Future work should compare
+   with time-series-specific methods like TS2Vec and TS-TCC.
 
 Q7: How sensitive is the method to the calibration data size (90 seconds)?
 A: 90 seconds yields 89 windows, which is sufficient to estimate a stable
@@ -369,4 +396,20 @@ A: 90 seconds yields 89 windows, which is sufficient to estimate a stable
    seconds provided reasonable results, though stability improves with more
    calibration data. This is a practical advantage -- only a brief healthy
    recording from the target system is needed.
+
+Q8: Why is per-fault precision 1.0 but binary precision is 98%?
+A: Per-fault precision is evaluated within each fault scenario separately --
+   the system never misclassifies a healthy window when comparing only
+   against faulty windows of the same type. Binary precision of 98% includes
+   healthy windows being misclassified as faulty (36 false positives out of
+   89 healthy windows), which occurs when healthy windows happen to fall
+   below the threshold. This is expected with higher thresholds and represents
+   a conservative over-detection behavior.
+
+Q9: Why did you use cosine similarity instead of Euclidean distance?
+A: Cosine similarity measures the angle between embeddings, making it invariant
+   to the magnitude of the embedding vectors. This is important because
+   contrastive learning optimizes for directional alignment, not absolute
+   distance. Cosine similarity is also bounded between -1 and 1, providing
+   a natural scale for threshold setting.
 ================================================================================
