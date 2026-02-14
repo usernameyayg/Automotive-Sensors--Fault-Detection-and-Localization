@@ -1,7 +1,7 @@
 ================================================================================
 MASTER THESIS DEFENSE - SPEAKER SCRIPT
 ================================================================================
-Total Duration: ~15 minutes (19 slides)
+Total Duration: ~15 minutes (20 slides)
 Timing guide per slide is marked with [TIME]
 ================================================================================
 
@@ -148,26 +148,53 @@ the healthy baseline shown in the top left for comparison. Each fault is
 expressed as a simple mathematical equation.
 
 
-SLIDE 9: SimCLR AND ENCODER [6:45 - 7:45]
+SLIDE 9: SimCLR AND ENCODER [6:45 - 7:30]
 --------------------------------------------------------------------------------
 The SimCLR framework operates as follows. Given an input window, we generate
 two different augmented views. Both views pass through the same shared 1D-CNN
-encoder, producing 256-dimensional embeddings. These are projected through a
-two-layer projection head into 128-dimensional space where the NT-Xent
-contrastive loss is computed.
-
-The loss maximizes agreement between the two views of the same window -- the
-positive pair -- while minimizing agreement with all other windows in the
-batch -- 254 negative pairs. The temperature parameter is 0.5.
+encoder, producing 256-dimensional embeddings. These embeddings are then
+passed through a projection head, which I will detail on the next slide.
 
 The encoder itself, shown at the bottom, is a three-block 1D-CNN. Block 1
 uses 64 filters with kernel size 7, Block 2 uses 128 filters with kernel
-size 5, and Block 3 uses 256 filters with kernel size 3. Adaptive average
-pooling produces the final 256-dimensional embedding. The total model has
-240,704 parameters -- a lightweight architecture enabling fast training.
+size 5, and Block 3 uses 256 filters with kernel size 3. Each block includes
+batch normalization and ReLU activation. Adaptive average pooling produces
+the final 256-dimensional embedding. The total model has 240,704 parameters
+-- a lightweight architecture enabling fast training.
 
 
-SLIDE 10: AUGMENTATION AND PREPROCESSING [7:45 - 8:30]
+SLIDE 10: PROJECTION HEAD AND NT-XENT LOSS [7:30 - 8:30]
+--------------------------------------------------------------------------------
+The projection head is a critical component of SimCLR. It is a two-layer
+MLP that maps the 256-dimensional encoder output h into a 128-dimensional
+projection space z, where the contrastive loss is computed.
+
+The architecture is straightforward: a linear layer from 256 to 256 with
+batch normalization and ReLU activation, followed by a second linear layer
+from 256 to 128, and finally L2 normalization. The projection head has
+99,200 parameters.
+
+The key insight from the original SimCLR paper is that the projection head
+is discarded after training. Only the encoder representations h -- the
+256-dimensional embeddings -- are used for downstream anomaly detection.
+This is because the projection head specializes its output space for the
+contrastive objective, while the encoder produces more general and
+transferable representations.
+
+The contrastive objective is the NT-Xent loss -- Normalized Temperature-
+scaled Cross-Entropy. For a positive pair z_i and z_j -- two augmented
+views of the same window -- the loss maximizes their cosine similarity while
+minimizing similarity with all 254 negative pairs in the batch. The
+temperature parameter tau is set to 0.5, which controls the sharpness of
+the similarity distribution.
+
+Training ran for 50 epochs with a learning rate of 0.001 using the Adam
+optimizer. The loss decreased from 4.0855 to 3.7955 -- a 7.1 percent
+reduction -- which is close to the theoretical minimum for this batch size,
+indicating good convergence.
+
+
+SLIDE 11: AUGMENTATION AND PREPROCESSING [8:30 - 9:15]
 --------------------------------------------------------------------------------
 The data preprocessing pipeline consists of three steps.
 
@@ -183,7 +210,7 @@ temporal robustness. These ensure the encoder learns representations invariant
 to minor perturbations while remaining sensitive to genuine fault patterns.
 
 
-SLIDE 11: ANOMALY DETECTION METHOD [8:30 - 9:30]
+SLIDE 12: ANOMALY DETECTION METHOD [9:15 - 10:00]
 --------------------------------------------------------------------------------
 The anomaly detection process works as follows.
 
@@ -203,7 +230,7 @@ to the healthy centroid, while faulty data produces embeddings that deviate
 from it.
 
 
-SLIDE 12: MULTI-THRESHOLD RESULTS [9:30 - 10:30]
+SLIDE 13: MULTI-THRESHOLD RESULTS [10:00 - 10:50]
 --------------------------------------------------------------------------------
 Now let me present the core results. The table on the right shows the
 detection performance across all six thresholds.
@@ -226,7 +253,7 @@ The ROC-AUC is 0.858, confirming that the learned representations provide
 genuine discriminative power between healthy and faulty windows.
 
 
-SLIDE 13: PER-FAULT RESULTS [10:30 - 11:30]
+SLIDE 14: PER-FAULT RESULTS [10:50 - 11:40]
 --------------------------------------------------------------------------------
 The recall heatmap reveals important differences between fault types and
 sensor locations.
@@ -248,7 +275,7 @@ reality that more severe and unusual faults are inherently more
 distinguishable from normal operation.
 
 
-SLIDE 14: BINARY CLASSIFICATION [11:30 - 12:15]
+SLIDE 15: BINARY CLASSIFICATION [11:40 - 12:15]
 --------------------------------------------------------------------------------
 For the binary classification task -- simply distinguishing healthy from
 faulty regardless of fault type -- the results at the 40th percentile show
@@ -263,7 +290,7 @@ the threshold percentile -- more true positives with a moderate increase in
 false positives.
 
 
-SLIDE 15: ROC AND SIMILARITY [12:15 - 13:00]
+SLIDE 16: ROC AND SIMILARITY [12:15 - 12:50]
 --------------------------------------------------------------------------------
 The ROC curve on the left shows the trade-off between true positive rate
 and false positive rate across all six thresholds. The area under the curve
@@ -279,7 +306,7 @@ The clear separation between these two distributions is what enables high
 detection accuracy.
 
 
-SLIDE 16: COMPUTING COSTS [13:00 - 13:45]
+SLIDE 17: COMPUTING COSTS [12:50 - 13:30]
 --------------------------------------------------------------------------------
 An important practical consideration is the computational cost. The entire
 end-to-end pipeline completes in about 147 seconds -- under 2.5 minutes --
@@ -297,7 +324,7 @@ approach is approximately 157 times faster while requiring no labeled data
 at all.
 
 
-SLIDE 17: CONCLUSION [13:45 - 14:45]
+SLIDE 18: CONCLUSION [13:30 - 14:30]
 --------------------------------------------------------------------------------
 To summarize the answers to our three research questions.
 
@@ -322,7 +349,7 @@ evaluation with six fault scenarios, and a complete pipeline that runs in
 under one minute on CPU.
 
 
-SLIDE 18: FUTURE WORK [14:45 - 15:15]
+SLIDE 19: FUTURE WORK [14:30 - 15:00]
 --------------------------------------------------------------------------------
 Several directions for future work emerge from this thesis.
 
@@ -339,7 +366,7 @@ deployment would enable real-time in-vehicle fault detection integrated with
 the ISO 26262 safety framework.
 
 
-SLIDE 19: THANK YOU [15:15 - 15:30]
+SLIDE 20: THANK YOU [15:00 - 15:15]
 --------------------------------------------------------------------------------
 Thank you for your attention. I am happy to answer any questions.
 

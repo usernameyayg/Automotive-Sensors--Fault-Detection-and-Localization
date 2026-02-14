@@ -391,7 +391,65 @@ add_image(s, os.path.join(FIGS, "encoder_architecture.png"),
           Inches(0.2), Inches(5.2), width=Inches(12.8), height=Inches(2.0))
 
 # =====================================================================
-# SLIDE 10: AUGMENTATION STRATEGIES
+# SLIDE 10: PROJECTION HEAD + NT-XENT LOSS (NEW)
+# =====================================================================
+s = add_slide()
+slide_title(s, "Projection Head and NT-Xent Loss")
+
+# Left: Projection Head Architecture
+tb = add_textbox(s, Inches(0.5), T_CONTENT, Inches(5.8), Inches(5.5))
+tf = tb.text_frame; tf.word_wrap = True
+set_text(tf, "Projection Head g(\u00b7)", size=20, bold=True, color=DARK_BLUE)
+add_para(tf, "", size=6)
+add_para(tf, "Two-layer MLP after encoder:", size=16, color=BLACK)
+add_para(tf, "", size=4)
+add_para(tf, "  h  (256-d)  \u2192  Linear(256, 256)", size=15, bold=True, color=RGBColor(125, 60, 152))
+add_para(tf, "                     \u2192  BatchNorm + ReLU", size=15, color=GRAY)
+add_para(tf, "                     \u2192  Linear(256, 128)", size=15, bold=True, color=RGBColor(125, 60, 152))
+add_para(tf, "  z  (128-d)  \u2190  L2 Normalize", size=15, bold=True, color=DARK_RED)
+add_para(tf, "", size=8)
+add_para(tf, "Parameters:", size=17, bold=True, color=MED_BLUE)
+add_bullet(tf, "Encoder f(\u00b7):     141,504 params", size=15)
+add_bullet(tf, "Projection g(\u00b7):   99,200 params", size=15)
+add_bullet(tf, "Total:              240,704 params", size=15, bold=True)
+add_para(tf, "", size=8)
+add_para(tf, "Key Insight:", size=17, bold=True, color=DARK_RED)
+add_para(tf, "  Projection head is discarded after training.", size=14, color=BLACK)
+add_para(tf, "  Only encoder representations h are used", size=14, color=BLACK)
+add_para(tf, "  for downstream anomaly detection.", size=14, color=BLACK)
+
+# Right: NT-Xent Loss Equation
+tb = add_textbox(s, Inches(6.8), T_CONTENT, Inches(6.0), Inches(5.5))
+tf = tb.text_frame; tf.word_wrap = True
+set_text(tf, "NT-Xent Loss (Contrastive Objective)", size=18, bold=True, color=DARK_BLUE)
+add_para(tf, "", size=8)
+
+# The equation in text form (PowerPoint can't do LaTeX natively)
+shape = s.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, Inches(7.0), Inches(2.3), Inches(5.5), Inches(1.6))
+shape.fill.solid(); shape.fill.fore_color.rgb = RGBColor(245, 245, 255)
+shape.line.color.rgb = MED_BLUE; shape.line.width = Pt(1.5)
+tf2 = shape.text_frame; tf2.word_wrap = True
+set_text(tf2, "", size=6)
+add_para(tf2, "\u2113(i,j) = \u2212 log [ exp(sim(z\u1d62, z\u2c7c) / \u03c4) ]", size=16, bold=True, color=BLACK, align=PP_ALIGN.CENTER)
+add_para(tf2, "\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500", size=12, color=MED_BLUE, align=PP_ALIGN.CENTER)
+add_para(tf2, "\u03a3(k\u2260i) exp(sim(z\u1d62, z\u2096) / \u03c4)", size=16, bold=True, color=BLACK, align=PP_ALIGN.CENTER)
+
+tb2 = add_textbox(s, Inches(6.8), Inches(4.1), Inches(6.0), Inches(3.2))
+tf3 = tb2.text_frame; tf3.word_wrap = True
+set_text(tf3, "Where:", size=16, bold=True, color=BLACK)
+add_bullet(tf3, "sim(u, v) = u\u1d40v / (||u|| \u00b7 ||v||)    (cosine similarity)", size=14)
+add_bullet(tf3, "\u03c4 = 0.5    (temperature parameter)", size=14)
+add_bullet(tf3, "(z\u1d62, z\u2c7c) = positive pair (same window)", size=14, color=DARK_GREEN)
+add_bullet(tf3, "(z\u1d62, z\u2096) for k\u2260i = negative pairs", size=14, color=DARK_RED)
+add_para(tf3, "", size=8)
+add_para(tf3, "Training Configuration:", size=17, bold=True, color=MED_BLUE)
+add_bullet(tf3, "Batch size = 128 \u2192 254 negatives per sample", size=14)
+add_bullet(tf3, "Epochs = 50, LR = 0.001 (Adam)", size=14)
+add_bullet(tf3, f"Loss: {R['training']['initial_loss']:.4f} \u2192 {R['training']['final_loss']:.4f} ({R['training']['loss_reduction_pct']:.1f}% reduction)", size=14, bold=True)
+add_bullet(tf3, f"Training time: {R['training']['training_time_sec']:.2f} s on CPU", size=14)
+
+# =====================================================================
+# SLIDE 11: AUGMENTATION STRATEGIES
 # =====================================================================
 s = add_slide()
 slide_title(s, "Data Preprocessing and Augmentation")
@@ -739,8 +797,8 @@ slide_titles = [
     "Title", "Outline", "Motivation", "Research Questions",
     "Related Work: Why SimCLR?", "Proposed Framework",
     "Datasets", "Fault Types", "SimCLR + Encoder",
-    "Augmentation & Preprocessing", "Anomaly Detection",
-    "Multi-Threshold Results", "Per-Fault Results",
+    "Projection Head + NT-Xent Loss", "Augmentation & Preprocessing",
+    "Anomaly Detection", "Multi-Threshold Results", "Per-Fault Results",
     "Binary Classification", "ROC + Similarity",
     "Computing Costs", "Conclusion", "Future Work", "Thank You"
 ]
