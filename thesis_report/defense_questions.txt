@@ -1,0 +1,386 @@
+================================================================================
+DEFENSE DISCUSSION QUESTIONS — COMPREHENSIVE PREPARATION
+================================================================================
+Organized by category. For each question: the question, then a suggested
+answer strategy. Keep answers concise (30-60 seconds each).
+================================================================================
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+CATEGORY 1: METHODOLOGY AND DESIGN CHOICES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Q1. Why SimCLR and not MoCo, BYOL, or a time-series-specific method
+    like TS2Vec?
+→ SimCLR is the simplest contrastive framework — no momentum encoder,
+  no memory bank, no asymmetric networks. For a first investigation into
+  automotive sensor fault detection, architectural simplicity reduces
+  confounding variables. If SimCLR works, more complex methods can be
+  benchmarked in future work. Chen et al. showed SimCLR matches or exceeds
+  MoCo when batch sizes are sufficient, and our batch size of 128 is
+  reasonable for this data volume.
+
+Q2. Why did you use only 2 sensor channels (accelerator and speed)?
+    Real vehicles have 100+ sensors.
+→ This is a proof-of-concept study. Two channels were sufficient to
+  demonstrate the method works. The channels were chosen because they
+  have a known physical relationship (driver input → vehicle response),
+  and they were the channels available in both the A2D2 dataset and our
+  HIL setup. The 1D-CNN architecture is channel-agnostic — scaling to
+  more channels requires only changing the input dimension from 2 to N.
+
+Q3. Why a 1D-CNN instead of a transformer or LSTM for the encoder?
+→ 1D-CNNs are computationally efficient, naturally capture local temporal
+  patterns through convolutional kernels, and have proven effective for
+  time series classification. For our 200-sample windows at 100 Hz (2
+  seconds of data), a CNN with receptive field covering the full window
+  is appropriate. Transformers would add quadratic complexity without
+  clear benefit for short, fixed-length windows. LSTMs are sequential
+  and slower to train. The CNN completed training in 118 seconds.
+
+Q4. Why window size 200 and stride 100? How sensitive are results to
+    these hyperparameters?
+→ Window size 200 at 100 Hz gives 2-second windows, which is long enough
+  to capture transient fault patterns while short enough for near-real-time
+  detection. Stride 100 (50% overlap) is a standard choice that balances
+  temporal resolution with computational cost. We did not perform an
+  extensive hyperparameter sweep on window size — this is acknowledged
+  as a limitation and an opportunity for future work.
+
+Q5. Why cosine similarity and not Euclidean distance for anomaly detection?
+→ Cosine similarity measures angular distance in the representation space,
+  which is scale-invariant. After contrastive training with L2-normalized
+  projections, the encoder naturally produces representations that are
+  well-suited for angular comparison. Cosine similarity is also bounded
+  [−1, 1], making threshold selection more interpretable than unbounded
+  Euclidean distance.
+
+Q6. Why use percentile-based thresholds instead of a fixed threshold
+    or learned threshold?
+→ Percentile-based thresholds are adaptive to the actual distribution of
+  healthy embeddings. A fixed threshold would not generalize across
+  different sensor configurations or encoder initializations. We chose
+  manual percentile selection to keep the method transparent and
+  interpretable. Adaptive thresholding (e.g., using the distribution's
+  mean minus k standard deviations) is a natural extension.
+
+Q7. You chose temperature τ = 0.5. Why this value? What happens if
+    you change it?
+→ τ = 0.5 is the value used in the original SimCLR paper for smaller
+  batch sizes. A smaller τ makes the loss more sensitive to hard negatives
+  (similar but different windows), producing more discriminative
+  representations. A larger τ makes training smoother but potentially
+  less discriminative. We used the established default. A systematic
+  τ sensitivity study would be valuable future work.
+
+Q8. Why did you choose a 3-block CNN instead of deeper or shallower?
+→ Three blocks with filter sizes 64→128→256 provide a progressive
+  increase in representation capacity while keeping the model lightweight
+  at 141,504 parameters. Deeper networks risk overfitting on our
+  relatively small dataset (2,189 windows). Shallower networks may not
+  capture sufficient temporal patterns. The three-block design follows
+  standard CNN architecture conventions for time series.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+CATEGORY 2: RESULTS AND INTERPRETATION
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Q9. Per-fault precision is 1.0 everywhere. Doesn't that seem too perfect?
+    Is something wrong with the evaluation?
+→ No. Per-fault precision = 1.0 means that when evaluating each fault
+  file individually (only fault windows, no healthy windows in the test
+  set), every window that exceeded the threshold was indeed faulty. This
+  is not surprising because each fault file contains exclusively faulty
+  data — there are no healthy windows to misclassify as faulty. The
+  binary classification (which includes 89 healthy windows) shows a more
+  realistic precision of 98.0%, with 36 false positives.
+
+Q10. The ROC-AUC is 0.8575 — isn't that mediocre? Why not higher?
+→ The ROC-AUC reflects the trade-off across ALL threshold levels, not
+  just the optimal one. At our best operating point (40th percentile),
+  F1 is 0.965, which is excellent. The AUC is moderated by the fact that
+  at lower thresholds (15th), recall is only 70.7%. Also, ROC-AUC is
+  computed on the binary task with only 89 healthy windows — a small
+  negative class can make AUC volatile. The AUC is significantly above
+  random (0.5) and consistent with strong detection performance.
+
+Q11. Why is accelerator stuck-at the hardest fault to detect (89.8%)?
+→ A stuck-at fault on the accelerator freezes the signal at a constant
+  value. But in real driving, the accelerator pedal legitimately stays
+  at 0% for extended periods (coasting, braking). The training data
+  contains many such flat segments, so the encoder has learned that
+  constant accelerator readings can be normal. This makes stuck-at on
+  the accelerator less anomalous than, say, gain faults on speed.
+
+Q12. You have 36 false positives out of 89 healthy windows (40% FP rate).
+     Isn't that too high for a safety-critical system?
+→ Two points. First, these false positives come from the HIL calibration
+  data, which may differ slightly from the training domain (A2D2).
+  Cross-domain distribution shift affects healthy windows too. Second,
+  in safety-critical applications, the cost of missing a fault far exceeds
+  the cost of a false alarm. A false alarm triggers a diagnostic check;
+  a missed fault can cause an accident. At the 30th percentile, FP drops
+  to 27/89 (30%) with recall still at 90.9%. The threshold is a tunable
+  parameter for each deployment context.
+
+Q13. The loss only decreased by 7.1% (4.085 → 3.796). Is the model
+     actually learning anything meaningful?
+→ In contrastive learning, the absolute loss value and percentage
+  reduction are not directly comparable to supervised classification
+  losses. The NT-Xent loss is a log-softmax over all negative pairs —
+  with batch size 128, the denominator sums over 254 terms, so the
+  theoretical minimum is well above zero. What matters is the quality
+  of learned representations, which we verify through downstream fault
+  detection performance: F1 = 0.965 demonstrates the encoder learned
+  useful features despite modest loss reduction.
+
+Q14. How do you know the model isn't just memorizing the training data?
+→ The model trains on A2D2 real driving data and is tested on HIL
+  simulation data — a completely different data source with different
+  signal characteristics. If the model were memorizing A2D2, it would
+  fail on HIL data. The fact that we achieve 93.3% recall on HIL fault
+  data demonstrates genuine feature learning, not memorization.
+  Additionally, the augmentations (jitter, scaling, masking) act as
+  regularization during training.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+CATEGORY 3: CROSS-DOMAIN TRANSFER
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Q15. The training data (A2D2) and test data (HIL) come from completely
+     different sources. How can the model generalize?
+→ Z-score normalization maps both domains to zero mean and unit variance,
+  reducing distributional shift. The encoder learns general temporal
+  patterns — trends, oscillations, correlations between channels — rather
+  than domain-specific signal amplitudes. Contrastive learning with
+  augmentations further encourages domain-invariant features. The 93.3%
+  recall on HIL data validates that the learned representations transfer.
+
+Q16. Does the Z-score normalization use A2D2 statistics or HIL statistics?
+→ We use A2D2 statistics (μ and σ) for normalization of both A2D2 and HIL
+  data. This is correct practice: the normalization parameters come from
+  the training distribution. Using HIL statistics would constitute data
+  leakage.
+
+Q17. What if the HIL simulation data is too different from real driving?
+     Would the approach still work?
+→ The HIL simulator at TU Clausthal uses a dSPACE system that models real
+  vehicle dynamics. The healthy HIL data is similar enough to real driving
+  that the encoder's learned representations remain valid. However, if the
+  simulation fidelity were very low, the cross-domain gap would increase.
+  This is why the calibration step (Phase 2) uses healthy HIL data — it
+  partially bridges the domain gap by computing the centroid in the target
+  domain's representation space.
+
+Q18. You calibrate with only 89 windows (90 seconds). Is that enough?
+→ 89 windows provide a reasonable estimate of the healthy centroid. Since
+  we use cosine similarity to a single centroid, we mainly need the mean
+  direction of healthy embeddings, which stabilizes quickly with moderate
+  sample sizes. The percentile thresholds are computed from 89 data
+  points, which gives limited resolution but is sufficient for the six
+  percentile levels we evaluate. More calibration data would refine the
+  threshold but is unlikely to fundamentally change the results.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+CATEGORY 4: PRACTICAL AND INDUSTRIAL RELEVANCE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Q19. How would this be deployed in a real vehicle?
+→ The trained encoder (141K parameters, ~0.5 MB) would be deployed on an
+  edge device (ECU or companion processor). Calibration happens once per
+  vehicle during production testing. At runtime, each 2-second window is
+  encoded in ~0.5 ms and compared to the stored centroid. The threshold
+  can be configured per ASIL level. The main challenge is integrating
+  with existing OBD-II / UDS diagnostic protocols.
+
+Q20. You compare with Ghannoum's CNN-GRU (23,000s training). Is that
+     a fair comparison?
+→ It's a rough order-of-magnitude comparison to contextualize our
+  computational efficiency. Ghannoum's method is supervised and uses
+  different data, so the comparison is not apples-to-apples. The point
+  is that self-supervised methods can be orders of magnitude faster
+  because they don't need the complex architectures and large labeled
+  datasets that supervised methods require. A proper comparison would
+  need to evaluate both methods on the same dataset.
+
+Q21. Can this method handle intermittent faults or gradual degradation?
+→ Our current evaluation uses sustained faults — the fault is present
+  for the entire recording. Intermittent faults (appearing and
+  disappearing) would be detected in windows where the fault is active
+  and missed in clean windows, which is actually correct behavior.
+  Gradual degradation is harder — if the change is slow enough, individual
+  windows may remain within the normal distribution. Detecting degradation
+  would require tracking similarity trends over time rather than per-window
+  classification.
+
+Q22. What about fault types you didn't test — bias faults, drift faults,
+     delay faults?
+→ Our three fault types (gain, noise, stuck-at) cover the most common
+  sensor failure modes identified in the ISO 11452 and ISO 26262
+  standards. Bias faults (constant offset) are similar to gain faults
+  and would likely be detected. Drift faults (slowly increasing offset)
+  are more challenging, as discussed in the previous question. Delay
+  faults (temporal shift) are an interesting case — the cross-channel
+  correlation pattern would change, which the encoder might detect.
+  Testing additional fault types is planned future work.
+
+Q23. How does this relate to ISO 26262 and functional safety?
+→ ISO 26262 requires that safety-critical functions have fault detection
+  mechanisms. Our approach could serve as a runtime sensor plausibility
+  check. The threshold percentile maps to a controllable false alarm rate,
+  which can be set according to the ASIL level of the function. ASIL-D
+  (highest safety) would use a lower threshold (more conservative, higher
+  recall), accepting more false positives. ASIL-A might use a higher
+  threshold. Formal certification would require additional validation
+  beyond this thesis scope.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+CATEGORY 5: LIMITATIONS AND FUTURE WORK
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Q24. What are the main limitations of your work?
+→ Five key limitations: (1) Only 2 sensor channels — real vehicles have
+  100+. (2) Only 3 fault types — the fault taxonomy is larger. (3) No
+  fault localization — we detect that something is wrong but don't
+  identify which sensor is faulty. (4) Tested only on simulated faults,
+  not real field failures. (5) Fixed window size and threshold selection
+  require manual tuning. Each of these is addressed in our future work.
+
+Q25. You cannot tell WHICH sensor is faulty. How would you add fault
+     localization?
+→ Two approaches: (1) Channel-wise encoding — train separate encoders per
+  sensor or use channel attention mechanisms. Compare each channel's
+  embedding to its respective healthy centroid. The channel with highest
+  anomaly score is the faulty one. (2) Gradient-based attribution — use
+  techniques like Grad-CAM on the encoder to identify which input
+  channels and time steps contribute most to the anomaly score.
+
+Q26. You mention adaptive thresholding as future work. What would that
+     look like?
+→ Instead of fixed percentiles, the threshold could be set automatically
+  using statistical methods on the calibration distribution — for example,
+  mean minus k·sigma of the healthy similarity distribution, where k is
+  derived from a target false positive rate. Alternatively, one could
+  use extreme value theory to model the tail of the healthy distribution
+  and set the threshold at a specified confidence level.
+
+Q27. Would the method work on different vehicles or driving conditions
+     (highway vs. city vs. parking)?
+→ The Z-score normalization partially handles different signal ranges.
+  However, driving behavior differs significantly between highway (high
+  speed, steady) and city (stop-and-go). The current model trains on
+  Munich city driving from A2D2. For highway deployment, re-training or
+  fine-tuning on highway data would be advisable. Alternatively, training
+  on a diverse mixture of driving conditions would produce a more robust
+  encoder.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+CATEGORY 6: TECHNICAL DEEP-DIVE QUESTIONS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Q28. Why L2 normalization before cosine similarity? What happens without it?
+→ Without L2 normalization, cosine similarity still works (it includes
+  the normalization in its formula). However, L2 normalization in the
+  projection head ensures that the contrastive loss operates on a
+  hypersphere, which stabilizes training and prevents representation
+  collapse (where all embeddings converge to a single point). The
+  normalization constrains the geometry of the learned space.
+
+Q29. What optimizer and learning rate did you use?
+→ Adam optimizer with default learning rate 0.001. Adam is well-suited
+  for contrastive learning because it handles the noisy gradients from
+  the NT-Xent loss effectively. We did not use a learning rate scheduler,
+  though cosine annealing or warm-up could potentially improve convergence.
+
+Q30. Why global average pooling instead of flattening after the CNN?
+→ Global average pooling produces a fixed-length representation regardless
+  of the temporal dimension after convolution. Flattening would make the
+  encoder input-length-dependent and dramatically increase parameter count.
+  GAP also provides implicit regularization by averaging over the temporal
+  dimension, reducing overfitting.
+
+Q31. What happens if you train longer — more epochs?
+→ We trained for 50 epochs. The loss plateau suggests diminishing returns
+  from additional training. However, we did not perform an early stopping
+  analysis. Training longer could help or could lead to representation
+  collapse in contrastive learning. This would require monitoring
+  downstream task performance (fault detection F1) as a function of
+  training epochs, which is a valid future experiment.
+
+Q32. You upsample speed from 50 Hz to 100 Hz. What method? Could this
+     introduce artifacts?
+→ We use linear interpolation to upsample. This is standard practice
+  for aligning multi-rate sensor data. At 50→100 Hz, each interpolated
+  sample falls between two real measurements, introducing minimal
+  distortion. Higher upsampling ratios could introduce visible artifacts.
+  Alternative methods (zero-order hold, spline) could be compared but
+  are unlikely to significantly affect results at this ratio.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+CATEGORY 7: CURVEBALL / CREATIVE QUESTIONS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Q33. If you had to start this thesis over, what would you do differently?
+→ Three things: (1) Include more sensor channels from the start to make
+  the results more generalizable. (2) Collect real vehicle fault data
+  instead of relying solely on simulated faults. (3) Compare multiple
+  SSL methods (SimCLR, BYOL, TS2Vec) systematically rather than selecting
+  SimCLR upfront.
+
+Q34. An examiner plays devil's advocate: "Isn't this just an autoencoder
+     with extra steps? Why not use a simple reconstruction-based anomaly
+     detector?"
+→ Autoencoders detect anomalies by reconstruction error — if the model
+  can't reconstruct the input, it's anomalous. The problem: autoencoders
+  can sometimes reconstruct faults if the fault patterns resemble training
+  data patterns. Contrastive learning is fundamentally different — it
+  learns a similarity metric in representation space rather than
+  reconstructing inputs. Our approach compares the representation of a
+  test window to a healthy centroid, which is conceptually simpler and
+  more robust. Also, contrastive representations are known to be more
+  transferable across domains than reconstruction-based ones.
+
+Q35. Could an adversary craft a fault that evades your detector?
+→ Yes, theoretically. If an adversary knew the encoder's learned
+  representations, they could craft a signal that produces embeddings
+  close to the healthy centroid despite being faulty. However, this
+  requires white-box access to the model. In practice, sensor faults
+  are physical phenomena (hardware failures, EMI), not adversarial
+  attacks. For adversarial robustness, adversarial training or certified
+  defense methods could be incorporated, but this is beyond the scope
+  of sensor fault detection.
+
+Q36. What is the minimum amount of training data needed? Could you train
+     with just 1 minute of data instead of 36.5 minutes?
+→ We did not perform a data ablation study. Intuitively, contrastive
+  learning needs enough windows to form meaningful positive/negative
+  pairs within batches. With batch size 128, we need at least 128 windows
+  per batch. With 2,189 windows, we have 17 batches per epoch. Reducing
+  to 1 minute (~600 samples, ~5 windows) would be far too little. A data
+  efficiency study — training on 25%, 50%, 75% of data — would be
+  valuable future work to establish minimum requirements.
+
+Q37. Why not combine your approach with a supervised fine-tuning step
+     when some labeled fault data becomes available?
+→ That's an excellent extension. Self-supervised pre-training followed
+  by supervised fine-tuning is a well-established paradigm. If even a
+  small amount of labeled fault data is available, fine-tuning the
+  encoder (or training a simple classifier on top of frozen
+  representations) could significantly boost performance, especially
+  for the harder fault types like accelerator stuck-at. This is a
+  promising direction that maintains the benefit of not needing labels
+  initially while leveraging them when available.
+
+
+================================================================================
+TOTAL: 37 questions across 7 categories
+Preparation tip: Practice speaking each answer in under 60 seconds.
+The examiner wants to see that you understand the "why" behind every
+decision, not just the "what."
+================================================================================

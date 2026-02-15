@@ -1,0 +1,449 @@
+================================================================================
+MASTER THESIS DEFENSE TRANSCRIPT
+"Intelligent Analysis of Automotive Sensor Faults Using
+Self-Supervised Learning and Real-Time Simulation"
+
+Yahia Amir Yahia Gamal
+TU Clausthal | February 2026
+Target Duration: 17-18 minutes
+================================================================================
+
+[SLIDE 1 — Title Slide] (0:00 – 0:30)
+────────────────────────────────────────
+
+Good morning, Professor Knieke, Dr. Abboush, and members of the committee.
+
+My name is Yahia Gamal, and today I will present my Master thesis:
+"Intelligent Analysis of Automotive Sensor Faults Using Self-Supervised
+Learning and Real-Time Simulation," conducted at the Institute for Software
+and Systems Engineering here at TU Clausthal.
+
+
+[SLIDE 2 — Outline] (0:30 – 1:00)
+────────────────────────────────────────
+
+Here is the outline of my presentation. I will begin with the motivation and
+problem statement, followed by our research questions. Then I will discuss
+why we chose SimCLR from among existing self-supervised methods, present
+our three-phase framework, describe the datasets and fault types, explain
+the architecture and anomaly detection method, show our evaluation results,
+and conclude with a summary and future directions.
+
+
+[SLIDE 3 — Motivation and Problem Statement] (1:00 – 2:15)
+────────────────────────────────────────
+
+Let me start with the problem we are trying to solve.
+
+Modern vehicles rely on over 100 sensors for safety-critical functions —
+accelerator pedals, speed sensors, brake pressure, steering angle — all
+feeding data into ADAS and autonomous driving systems. When a sensor
+develops a fault, it can compromise the entire control chain.
+
+ISO 26262 mandates rigorous validation, but the traditional supervised
+approach to fault detection requires labeled fault data — which is both
+expensive to collect and inherently incomplete. You cannot label every
+possible fault condition.
+
+Our solution takes a fundamentally different approach: we train only on
+healthy driving data using self-supervised contrastive learning. The model
+learns what "normal" looks like, and then anything that deviates
+significantly from that learned normality is flagged as a fault. No labeled
+fault data is needed during training.
+
+Moreover, we demonstrate cross-domain transfer: the model trains on real
+driving data from Audi's A2D2 dataset, and is then tested on fault data
+generated through Hardware-in-the-Loop simulation at TU Clausthal.
+
+
+[SLIDE 4 — Background: Development and Learning Paradigms] (2:15 – 3:15)
+────────────────────────────────────────
+
+Before diving into the method, let me briefly cover two foundational
+concepts.
+
+On the left, the V-Model development process. In automotive software
+development, verification and validation happen at every level. HIL
+simulation sits at the integration testing level — it bridges the gap
+between pure software simulation and real vehicle testing. Our approach
+leverages this by training on real-world data and testing on HIL data.
+
+On the right, contrastive learning. The core idea is simple: take the same
+data window, create two augmented views of it — these are positive pairs.
+Views from different windows are negative pairs. The learning objective,
+called NT-Xent loss, pulls positive pairs closer together in the
+representation space while pushing negative pairs apart. This forces the
+encoder to learn meaningful features of the data without any labels.
+
+
+[SLIDE 5 — Research Questions] (3:15 – 4:00)
+────────────────────────────────────────
+
+This thesis is structured around three research questions.
+
+RQ1: Can self-supervised contrastive learning, trained exclusively on
+healthy sensor data, actually detect sensor faults? This tests the core
+feasibility of the approach.
+
+RQ2: How does the detection threshold affect the precision-recall trade-off?
+We evaluate six different percentile thresholds to understand this
+relationship systematically.
+
+RQ3: Which fault types and sensors are most detectable, and which are
+hardest? We compare gain, noise, and stuck-at faults across accelerator
+and speed sensors.
+
+
+[SLIDE 6 — Related Work: Why SimCLR?] (4:00 – 5:00)
+────────────────────────────────────────
+
+Now, why did we choose SimCLR among all available self-supervised methods?
+
+This figure compares five prominent self-supervised learning frameworks.
+MoCo uses a momentum-updated encoder and a memory bank. BYOL removes
+negative pairs entirely but requires asymmetric networks with exponential
+moving averages. TS2Vec and TS-TCC are time-series-specific but add
+architectural complexity.
+
+SimCLR is the simplest architecture: one encoder, one projection head,
+one loss function. No momentum encoder, no memory bank, no asymmetric
+networks. It has strong theoretical grounding through the NT-Xent loss
+and has been successfully applied to bearing fault detection by Tang et al.
+and motor diagnosis by Wang et al.
+
+However — and this is the key gap — SimCLR has never been applied to
+automotive sensor fault detection. This is what our work addresses.
+
+
+[SLIDE 7 — SimCLR Original Paper] (5:00 – 5:30)
+────────────────────────────────────────
+
+This is the original SimCLR framework from Chen et al., published at ICML
+2020. The pipeline consists of: random augmentations to create two views,
+a shared encoder that produces representations, a projection head that
+maps to the contrastive loss space, and the NT-Xent loss that maximizes
+agreement between positive pairs. We adapt this framework from images to
+one-dimensional time series from automotive sensors.
+
+
+[SLIDE 8 — Proposed Framework: Three-Phase Architecture] (5:30 – 6:30)
+────────────────────────────────────────
+
+Here is our complete three-phase framework.
+
+Phase 1, shown in green: We train the SimCLR encoder on healthy A2D2
+driving data. The encoder learns general representations of what normal
+sensor behavior looks like. This is the only phase that requires
+computational effort.
+
+Phase 2, in blue: Calibration. We take 90 seconds of healthy HIL data —
+just 89 windows — pass them through the frozen encoder, and compute a
+healthy centroid. We also set detection thresholds at six percentile
+levels based on the similarity distribution of these healthy embeddings.
+
+Phase 3, in orange: Online detection. Each incoming test window is encoded,
+its cosine similarity to the healthy centroid is computed, and if it falls
+below the threshold, it is flagged as faulty.
+
+This separation is deliberate — the expensive training happens once, while
+calibration and detection are extremely fast.
+
+
+[SLIDE 9 — Datasets: A2D2 and HIL] (6:30 – 7:30)
+────────────────────────────────────────
+
+We use two complementary datasets.
+
+On the left: the A2D2 dataset from Audi. This contains real-world driving
+data recorded in Munich. We use 219,064 samples across three recording
+sessions, totaling 36.5 minutes of driving at 100 Hz. We extract two
+channels: accelerator pedal position in percent and vehicle speed in
+kilometers per hour. The speed signal was originally at 50 Hz, so we
+upsample it to 100 Hz. Key statistics: accelerator mean is 6.99% with
+standard deviation 8.70, speed mean is 17.21 km/h with standard deviation
+14.78, and the correlation between them is 0.53. Only healthy data is
+used for training.
+
+On the right: HIL data from our dSPACE simulator at TU Clausthal. We have
+one healthy recording for calibration — 89 windows from 90 seconds of
+data — and six fault recordings: three fault types times two sensors,
+giving us 1,911 total fault windows for testing.
+
+This is a true cross-domain setup: the model never sees HIL data during
+training.
+
+
+[SLIDE 10 — Fault Injection Types] (7:30 – 8:15)
+────────────────────────────────────────
+
+We inject three types of faults, each modeling real sensor failure modes.
+
+Gain fault: y equals alpha times x. This models calibration drift or
+amplifier degradation — the signal is scaled by a factor.
+
+Noise fault: y equals x plus eta, where eta is drawn from a Gaussian
+distribution. This models electromagnetic interference or loose
+connections — random noise is superimposed on the signal.
+
+Stuck-at fault: y equals a constant c. This models hardware failure —
+the sensor output freezes at a fixed value regardless of actual input.
+
+The figure on the left shows examples of each fault type applied to
+real sensor signals, so you can visually see how each distortion affects
+the time series.
+
+
+[SLIDE 11 — SimCLR Architecture and 1D-CNN Encoder] (8:15 – 8:45)
+────────────────────────────────────────
+
+This slide shows the overall SimCLR architecture adapted for our use case.
+Each input window of 200 samples with 2 channels passes through
+augmentation to create two views. Both views are processed by a shared
+1D-CNN encoder producing 256-dimensional representations, followed by a
+projection head that maps down to 128 dimensions for the contrastive loss
+computation.
+
+
+[SLIDE 12 — Data Preprocessing and Augmentation] (8:45 – 9:30)
+────────────────────────────────────────
+
+Before training, we apply a three-step preprocessing pipeline.
+
+First, Z-score normalization using the mean and standard deviation computed
+from the A2D2 training data. This gives us zero-mean, unit-variance inputs.
+
+Second, segmentation using sliding windows of length 200 with stride 100,
+giving 50% overlap. This produces 2,189 training windows.
+
+Third, augmentation. We apply three strategies: Gaussian jitter with sigma
+0.1 to simulate sensor noise, amplitude scaling between 0.8 and 1.2 to
+simulate calibration variance, and temporal masking of 10% of samples to
+force temporal robustness. Each window gets two different augmented views
+per epoch, creating the positive pairs for contrastive learning.
+
+
+[SLIDE 13 — 1D-CNN Encoder Architecture] (9:30 – 10:00)
+────────────────────────────────────────
+
+The encoder consists of three convolutional blocks. Each block contains a
+1D convolution layer, batch normalization, ReLU activation, and max
+pooling. The first block uses 64 filters with kernel size 7, the second
+uses 128 filters with kernel size 5, and the third uses 256 filters with
+kernel size 3. After the final block, global average pooling produces a
+fixed 256-dimensional representation vector regardless of input length.
+Total encoder parameters: 141,504.
+
+
+[SLIDE 14 — Projection Head g(·)] (10:00 – 10:45)
+────────────────────────────────────────
+
+The projection head is a two-layer MLP that sits on top of the encoder
+during training only.
+
+It takes the 256-dimensional encoder output h, passes it through a linear
+layer of 256 to 256 with batch normalization and ReLU, then a second
+linear layer from 256 to 128, and finally L2 normalization. This produces
+the 128-dimensional vector z used in the contrastive loss.
+
+The key insight — and this is important — the projection head is discarded
+after training. Chen et al. showed that the encoder representations h
+contain richer information than the projected vectors z. So for downstream
+anomaly detection, we use h, not z.
+
+The parameter breakdown: encoder has 141,504 parameters, projection head
+has 99,200, for a total of 240,704 trainable parameters.
+
+
+[SLIDE 15 — NT-Xent Loss] (10:45 – 11:45)
+────────────────────────────────────────
+
+Now, the loss function that drives the entire learning process: the
+Normalized Temperature-scaled Cross-Entropy loss, or NT-Xent.
+
+First, we L2-normalize every projected vector z to unit length. This
+ensures that dot products become cosine similarities.
+
+Then, for a positive pair z_i and z_j — two views of the same window —
+the loss is the negative log of the exponential of their similarity
+divided by tau, over the sum of exponentials of similarities with all
+other samples in the batch. The denominator includes all 2N minus 1 other
+samples — both the other positive and all negatives.
+
+The temperature parameter tau is set to 0.5. A smaller tau makes the
+loss more sensitive to hard negatives, forcing the model to learn finer
+distinctions. We use a batch size of 128, so each training step contrasts
+128 positive pairs against 254 negatives.
+
+
+[SLIDE 16 — Training Summary] (11:45 – 12:15)
+────────────────────────────────────────
+
+A quick summary of training configuration. We train for 50 epochs on
+2,189 windows, with 17 batches per epoch. The initial loss was 4.085
+and converged to 3.796 — a 7.1% reduction. Total training time: 118
+seconds on CPU. No GPU was required. Total trainable parameters: 240,704.
+
+
+[SLIDE 17 — Anomaly Detection Method] (12:15 – 13:00)
+────────────────────────────────────────
+
+Once the encoder is trained, anomaly detection works in two steps.
+
+Phase 2 — Calibration: We take 89 healthy HIL windows, pass them through
+the frozen encoder, and compute the healthy centroid mu as the mean of
+all healthy embeddings. Then we compute the cosine similarity of each
+healthy window to this centroid and set thresholds at six percentile
+levels: 15th, 20th, 25th, 30th, 35th, and 40th.
+
+Phase 3 — Detection: For each incoming test window, we encode it, compute
+its cosine similarity to the healthy centroid. If the similarity is below
+the threshold tau, we classify it as faulty. If it is at or above tau,
+we classify it as healthy.
+
+This is fundamentally a one-class classification approach — we only model
+normal behavior and flag deviations.
+
+
+[SLIDE 18 — Results: Multi-Threshold Detection Performance] (13:00 – 13:45)
+────────────────────────────────────────
+
+Now to the results. This table and figure show performance across all six
+thresholds.
+
+The most striking finding: per-fault precision is 1.0 at every single
+threshold. This means whenever the system flags a fault, it is always
+correct — zero false alarms within individual fault scenarios.
+
+As we increase the threshold percentile, recall improves from 70.7% at
+the 15th percentile to 93.3% at the 40th percentile. F1-score
+correspondingly increases from 0.825 to 0.965.
+
+The optimal operating point is the 40th percentile with threshold value
+0.974, achieving an F1-score of 0.965. The ROC-AUC across all thresholds
+is 0.8575.
+
+
+[SLIDE 19 — Results: Per-Fault Recall Analysis] (13:45 – 14:30)
+────────────────────────────────────────
+
+This heatmap breaks down recall by fault type across thresholds. At the
+40th percentile:
+
+Speed gain fault is the easiest to detect: 99.7% recall — 320 out of 321
+windows detected. This makes intuitive sense: a gain fault on speed
+creates a large, sustained distortion that the encoder easily identifies.
+
+Accelerator stuck-at is the hardest: 89.8% recall. Stuck-at faults on the
+accelerator pedal can sometimes resemble legitimate driving behavior — a
+driver holding the pedal at a constant position — making detection harder.
+
+Overall, speed sensor faults are more detectable than accelerator faults.
+This is because speed has lower natural variability, so deviations from
+learned patterns are more pronounced. The detectability ranking directly
+reflects the physical severity of each fault-sensor combination.
+
+
+[SLIDE 20 — Results: Binary Classification] (14:30 – 15:15)
+────────────────────────────────────────
+
+For the binary healthy-versus-faulty classification at the 40th percentile:
+accuracy is 91.8%, precision is 98.0%, recall is 93.3%, and F1-score is
+0.956.
+
+The confusion matrix shows: 1,783 true positives, 53 true negatives,
+128 false negatives, and 36 false positives. Out of 89 healthy windows,
+53 were correctly identified as healthy and 36 were flagged as potentially
+faulty. Out of 1,911 fault windows, 1,783 were correctly detected.
+
+The false positive rate of 36 out of 89 healthy windows is a direct
+consequence of using a higher threshold percentile — we accept more
+false positives to catch more faults. In safety-critical applications,
+this is the right trade-off: it is far more dangerous to miss a fault
+than to flag a healthy window for review.
+
+
+[SLIDE 21 — ROC Curves and Similarity Distributions] (15:15 – 15:45)
+────────────────────────────────────────
+
+The ROC curve on the left shows the trade-off between true positive rate
+and false positive rate. The AUC of 0.8575 confirms the model has
+significant discriminative ability above the random baseline.
+
+On the right, the similarity distribution plot shows clear separation
+between healthy windows, clustered near similarity value 1.0, and faulty
+windows, which show lower similarity values. This separation is what
+makes the threshold-based detection effective.
+
+
+[SLIDE 22 — Computing Cost Analysis] (15:45 – 16:30)
+────────────────────────────────────────
+
+An important practical consideration: how fast is this approach?
+
+The total end-to-end pipeline runs in 146.6 seconds — under two and a half
+minutes on a standard CPU. Training accounts for 80.5% of that at 118
+seconds. Data loading takes 18.9 seconds. Embedding extraction and
+evaluation together take about 6.6 seconds.
+
+At inference time, each window takes approximately 0.5 milliseconds.
+This makes the approach suitable for real-time deployment in vehicles.
+
+For perspective, Ghannoum's supervised CNN-GRU approach, which is the
+closest comparable method in the literature, requires approximately
+23,000 seconds — over 6 hours — for training. Our approach is roughly
+157 times faster, and it does not require any labeled fault data.
+This is a significant practical advantage for industrial adoption.
+
+
+[SLIDE 23 — Conclusion] (16:30 – 17:30)
+────────────────────────────────────────
+
+Let me now answer each research question.
+
+RQ1: Yes. Self-supervised representations learned from healthy A2D2 data
+successfully detect sensor faults in HIL simulation data. Cross-domain
+transfer works without any labeled fault examples. This validates the
+core feasibility of the approach.
+
+RQ2: Per-fault precision equals 1.0 at all six thresholds. Recall ranges
+from 70.7% to 93.3%. The optimal operating point is the 40th percentile
+with an F1-score of 0.965.
+
+RQ3: Speed gain faults are easiest to detect at 99.7% recall. Accelerator
+stuck-at faults are hardest at 89.8%. Detectability correlates with
+physical severity and natural sensor variability.
+
+Our key contributions: this is the first application of SimCLR to
+automotive sensor fault detection; we demonstrate successful cross-domain
+transfer from real driving data to HIL simulation; we provide a
+comprehensive multi-threshold evaluation covering six fault scenarios;
+and the complete pipeline runs in under 2.5 minutes on CPU with no GPU
+required.
+
+
+[SLIDE 24 — Future Work] (17:30 – 18:15)
+────────────────────────────────────────
+
+Looking ahead, in the short term: expanding to additional sensor channels
+such as RPM, steering angle, and brake pressure; adding fault localization
+to identify which specific sensor is faulty; developing adaptive
+thresholding to eliminate manual threshold selection; and validating on
+real vehicle fault data instead of only simulated faults.
+
+In the longer term: benchmarking against other SSL methods like TS2Vec,
+MoCo, and BYOL on the same task; integrating explainability techniques
+to provide diagnostic insights; deploying on edge devices for real-time
+in-vehicle detection; and mapping the approach to ISO 26262 ASIL levels
+for formal safety certification.
+
+
+[SLIDE 25 — Thank You] (18:15 – 18:30)
+────────────────────────────────────────
+
+Thank you for your attention. I am happy to answer any questions.
+
+
+================================================================================
+END OF TRANSCRIPT
+Total estimated duration: ~18 minutes
+================================================================================
